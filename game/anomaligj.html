@@ -1,0 +1,904 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Anomali Gaje v1.6 - Ultimate Editor</title>
+    <style>
+        * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; outline: none; box-sizing: border-box; }
+        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Segoe UI', sans-serif; touch-action: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        #ui {
+            position: absolute; top: 5vh; left: 0; width: 100%;
+            color: #fff; text-align: center; pointer-events: none; z-index: 20;
+            text-shadow: 0 0 10px #0ff;
+        }
+        #level-counter { 
+            font-size: clamp(1.5rem, 5vw, 3rem); 
+            font-weight: 900; letter-spacing: 5px; 
+            color: #e0ffff;
+        }
+        #hint { 
+            font-size: clamp(0.6rem, 3vw, 1rem); 
+            margin-top: 5px; background: rgba(0, 20, 20, 0.8); 
+            display: inline-block; padding: 5px 15px; border-radius: 20px; 
+            text-transform: uppercase; border: 1px solid #0ff; box-shadow: 0 0 5px #0ff;
+        }
+
+        /* UI BUTTONS */
+        .top-btn {
+            position: absolute; top: 20px; width: 45px; height: 45px;
+            background: rgba(0,0,0,0.6); border: 2px solid #0ff; color: #0ff;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 20px; font-weight: bold; cursor: pointer; z-index: 40;
+            pointer-events: auto; box-shadow: 0 0 10px #0ff; transition: 0.3s;
+        }
+        .top-btn:active { transform: scale(0.9); }
+        #btn-info { right: 20px; }
+        #btn-custom { right: 75px; font-size: 18px; }
+
+        /* OVERLAYS */
+        #guide-overlay, #finish-screen, #custom-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.95); color: #fff;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px; z-index: 100; text-align: center; 
+        }
+        #finish-screen { background: #fff; color: #000; }
+        
+        /* SCROLLABLE CUSTOM MENU */
+        #custom-overlay { 
+            justify-content: flex-start; padding-top: 50px; 
+            overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; 
+        }
+        
+        .custom-box {
+            background: rgba(20,20,20,0.9); border: 1px solid #0ff; padding: 20px;
+            border-radius: 10px; width: 100%; max-width: 500px; margin-bottom: 20px;
+            box-shadow: 0 0 15px rgba(0,255,255,0.2); flex-shrink: 0;
+            text-align: left;
+        }
+        .custom-box h3 { margin-top: 0; text-align: center; color: #0ff; border-bottom: 1px solid #333; padding-bottom: 10px; }
+
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-size: 0.85rem; color: #ccc; margin-bottom: 5px; }
+        .input-group input[type="text"], .input-group select {
+            width: 100%; padding: 8px; background: #000; border: 1px solid #555;
+            color: #fff; border-radius: 5px; font-family: monospace;
+        }
+        
+        /* SLIDER STYLES */
+        .setting-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .setting-row label { color: #fff; font-size: 0.9rem; }
+        input[type="checkbox"] { width: 20px; height: 20px; accent-color: #0ff; }
+        input[type="range"] { width: 100%; accent-color: #0ff; height: 5px; margin-top: 5px; }
+
+        .id-display {
+            font-family: monospace; font-size: 1.2rem; color: #ff0; text-align: center;
+            background: #333; padding: 5px 10px; border-radius: 5px; user-select: text; -webkit-user-select: text;
+        }
+
+        .action-btn { 
+            margin-top: 15px; padding: 12px 30px; border: none; border-radius: 30px; 
+            font-weight: bold; cursor: pointer; font-size: 1rem; width: 100%;
+            text-transform: uppercase; transition: transform 0.2s;
+        }
+        .start-btn { background: #0ff; color: #000; box-shadow: 0 0 15px #0ff; }
+        .restart-btn { background: #000; color: #fff; border: 2px solid #000; }
+        .save-btn { background: #0f0; color: #000; margin-top: 10px; }
+        .load-btn { background: #ff0; color: #000; margin-top: 5px; }
+        .close-btn { background: #f00; color: #fff; margin-top: 20px; margin-bottom: 50px; }
+        .action-btn:active { transform: scale(0.95); }
+
+        #joystick-container {
+            position: absolute; bottom: 8vh; left: 8vw;
+            width: 100px; height: 100px; background: rgba(255,255,255,0.05);
+            border-radius: 50%; border: 2px solid rgba(0, 255, 255, 0.3); z-index: 30;
+            backdrop-filter: blur(2px);
+        }
+        #joystick-knob {
+            position: absolute; top: 50%; left: 50%;
+            width: 40px; height: 40px; background: rgba(0, 255, 255, 0.8);
+            border-radius: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px #0ff;
+        }
+
+        #message {
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            width: 90%; text-align: center; font-size: clamp(1.5rem, 6vw, 3rem);
+            opacity: 0; transition: opacity 0.3s; z-index: 25;
+            font-weight: bold; text-shadow: 0 0 20px #000; pointer-events: none;
+        }
+
+        #loading {
+            position: fixed; inset: 0; background: #000; color: #0ff;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200;
+            font-family: monospace; letter-spacing: 2px;
+        }
+        .loader {
+            width: 50px; height: 50px; border: 3px solid transparent; border-top: 3px solid #0ff;
+            border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #pursuer-video { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="loading">
+    <div class="loader"></div>
+    <div id="loading-text">MEMUAT ASET...</div>
+</div>
+
+<video id="pursuer-video" loop crossorigin="anonymous" playsinline>
+    <source src="https://files.catbox.moe/fgxqru.mp4" type="video/mp4">
+</video>
+
+<!-- BUTTONS -->
+<div id="btn-info" class="top-btn">?</div>
+<div id="btn-custom" class="top-btn">✎</div>
+
+<!-- GUIDE OVERLAY -->
+<div id="guide-overlay" style="display: flex;">
+    <h2>INSTRUKSI SURVIVAL</h2>
+    <p>• Jika <b>NORMAL</b>, maju lewat garis <b style="color:#0f0">HIJAU</b>.</p>
+    <p>• Jika <b>ANOMALI</b>, balik arah lewat garis <b style="color:#f0f">MERAH</b>.</p>
+    <button class="action-btn start-btn" id="start-btn">MULAI GAME</button>
+</div>
+
+<!-- FINISH SCREEN -->
+<div id="finish-screen">
+    <h1 style="color:#000">KABUR BERHASIL</h1>
+    <p style="color:#333">Anda berhasil keluar dari loop.</p>
+    <button class="action-btn restart-btn" onclick="restartGame()">MAIN LAGI</button>
+</div>
+
+<!-- CUSTOM MAP MENU -->
+<div id="custom-overlay">
+    <h2 style="margin-bottom:10px;">ULTIMATE MAP EDITOR</h2>
+    
+    <!-- Box 1: Profile & Load -->
+    <div class="custom-box">
+        <h3>PROFILE</h3>
+        <p style="font-size:0.9rem; text-align:center;">ID MAP ANDA:</p>
+        <div id="my-device-id" class="id-display">LOADING...</div>
+        
+        <div class="input-group" style="margin-top:20px; border-top:1px solid #444; padding-top:15px;">
+            <label>Load Map Teman (Masukkan ID):</label>
+            <input type="text" id="target-id" placeholder="user_xxxxxxxxx">
+        </div>
+        <button class="action-btn load-btn" onclick="loadMapFromId()">LOAD MAP</button>
+        <button class="action-btn restart-btn" style="margin-top:10px; font-size:0.8rem;" onclick="resetToDefault()">RESET DEFAULT</button>
+    </div>
+
+    <!-- Box 2: Environment Settings -->
+    <div class="custom-box">
+        <h3>ATMOSFER & RULES</h3>
+        
+        <div class="input-group">
+            <label>Jumlah Exit untuk Menang: <span id="val-maxlvl" style="color:#ff0">8</span></label>
+            <input type="range" id="inp-maxlvl" min="3" max="50" value="8" oninput="document.getElementById('val-maxlvl').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Kecerahan (Brightness): <span id="val-bright" style="color:#0ff">1.0</span></label>
+            <input type="range" id="inp-bright" min="0.1" max="2.0" step="0.1" value="1.0" oninput="document.getElementById('val-bright').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Panjang Map (Loop Distance): <span id="val-dist" style="color:#0f0">45</span>m</label>
+            <input type="range" id="inp-dist" min="30" max="100" value="45" oninput="document.getElementById('val-dist').innerText = this.value">
+            <p style="font-size:0.7rem; color:#aaa; margin-top:2px;">*Semakin panjang, semakin jauh ujung terlihat (disarankan atur kabut)</p>
+        </div>
+
+        <div class="input-group">
+            <label>Kepadatan Kabut (Fog Density): <span id="val-fog" style="color:#aaa">0.035</span></label>
+            <input type="range" id="inp-fog" min="0.005" max="0.1" step="0.005" value="0.035" oninput="document.getElementById('val-fog').innerText = this.value">
+        </div>
+    </div>
+
+    <!-- Box 3: Anomaly Logic -->
+    <div class="custom-box">
+        <h3>LOGIKA ANOMALI</h3>
+        
+        <div class="input-group">
+            <label>Mode Kemunculan:</label>
+            <select id="inp-spawnmode">
+                <option value="random">Acak Murni (Random)</option>
+                <option value="sequence">Berurutan (Sequence)</option>
+                <option value="bag">Acak Bergiliran (Bag System)</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>Probabilitas Muncul: <span id="prob-val" style="color:#0ff">45%</span></label>
+            <input type="range" id="inp-prob" min="0" max="100" value="45" oninput="document.getElementById('prob-val').innerText = this.value + '%'">
+        </div>
+
+        <div style="border-top:1px solid #444; padding-top:10px; margin-top:10px;">
+            <p style="font-size:0.8rem; color:#aaa; margin-bottom:10px;">DAFTAR ANOMALI AKTIF:</p>
+            <div class="setting-row"><label>🎨 Lukisan Seram</label><input type="checkbox" id="chk-painting" checked></div>
+            <div class="setting-row"><label>🏃 Pengejar (Chaser)</label><input type="checkbox" id="chk-chaser" checked></div>
+            <div class="setting-row"><label>👀 Pengawas (Watcher)</label><input type="checkbox" id="chk-watcher" checked></div>
+            <div class="setting-row"><label>💃 Disco Math</label><input type="checkbox" id="chk-disco" checked></div>
+        </div>
+    </div>
+
+    <!-- Box 4: Texture Settings -->
+    <div class="custom-box">
+        <h3>TEXTURE ASSETS</h3>
+        <p style="font-size:0.75rem; color:#888;">Gunakan URL gambar (JPG/PNG).</p>
+        <div class="input-group"><label>Lantai:</label><input type="text" id="inp-floor"></div>
+        <div class="input-group"><label>Dinding:</label><input type="text" id="inp-wall"></div>
+        <div class="input-group"><label>Langit-langit:</label><input type="text" id="inp-ceiling"></div>
+        <div class="input-group"><label>Gambar Painting:</label><input type="text" id="inp-anomali"></div>
+        <div class="input-group"><label>Gambar Watcher:</label><input type="text" id="inp-watcher"></div>
+        <button class="action-btn save-btn" onclick="saveMyMap()">SIMPAN & TERAPKAN</button>
+    </div>
+
+    <button class="action-btn close-btn" id="close-custom">KEMBALI KE GAME</button>
+</div>
+
+<div id="ui">
+    <div id="level-counter">EXIT 0</div>
+    <div id="hint">CARI JALAN KELUAR</div>
+</div>
+
+<div id="message"></div>
+<div id="joystick-container"><div id="joystick-knob"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+    // --- FIREBASE CONFIG ---
+    const DB_URL = "https://puru-69425-default-rtdb.firebaseio.com/map/";
+    let deviceId = localStorage.getItem('anomali_device_id');
+    if (!deviceId) {
+        deviceId = 'user_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('anomali_device_id', deviceId);
+    }
+    document.getElementById('my-device-id').innerText = deviceId;
+
+    // --- DEFAULT DATA ---
+    const DEFAULT_MAP_DATA = {
+        textures: {
+            floor: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSVH1-lXBj-ZVmu-a6-hwwhY5f4fNK8WgJIfb3FbxAwFg&s=10',
+            wall: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTmR7tW5vT0UaMXP4pPf55ByMbpDbuauAau-ui4QWaLuw&s',
+            ceiling: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT_mOhDHd-RuSyXd-Pa6TZ7tvXDOVmbP6vsqz1I0s9WsQ&s=10',
+            anomalyImg: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSM13V_Aqp-e7DAbP7KhIJ_xYu-TuLkpRJ7-_b6-jZGOJbKs7Zfw46touY_fUD81z3GyF9zGZIwqSgN9faS4IIahvASVgYoOm_TW-eBjQ&s=10',
+            watcherImg: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTR9OfBNfx2PGfJbzMQkEGkqBmRi-KDL382scbGJdu8bw&s=10',
+            speakerImg: 'https://files.catbox.moe/se4bl1.png'
+        },
+        settings: {
+            probability: 45,
+            painting: true, chaser: true, watcher: true, disco: true,
+            maxLevel: 8,
+            brightness: 1.0,
+            loopDistance: 45,
+            fogDensity: 0.035,
+            spawnMode: 'random' // 'random', 'sequence', 'bag'
+        }
+    };
+
+    let currentMapData = JSON.parse(JSON.stringify(DEFAULT_MAP_DATA));
+
+    // --- GAME VARS ---
+    let scene, camera, renderer, clock;
+    let player = { height: 1.6, speed: 0.15, rotSpeed: 0.006, dir: 0, pitch: 0 };
+    let moveInput = { x: 0, y: 0 };
+    let activeTouches = { move: null, look: null };
+    let lastLookPos = { x: 0, y: 0 };
+    
+    let currentLevel = 0;
+    let isAnomaly = false;
+    let anomalyType = -1; 
+    let lastAnomalyType = -1;
+    let currentForwardDir = -1;
+    let isFinished = false;
+    let audioReady = false;
+
+    // Logic Vars for Spawn Modes
+    let anomalySequenceIndex = 0;
+    let anomalyBag = [];
+
+    // Anomaly State
+    let pursuer = null, pursuerActive = false;
+    let watcher = null, isWatcherActive = false, hasWatcherJumpscared = false;
+    let isDiscoActive = false, discoTriggered = false, discoObjects = [], correctMathDir = 0, levelLights = [];
+
+    const videoElement = document.getElementById('pursuer-video');
+    let videoTexture;
+    const loadedTextures = {};
+    let isInitialized = false;
+
+    const SOUNDS = {
+        jumpscare: new Audio('https://www.myinstants.com/media/sounds/vine-boom.mp3'),
+        disco: new Audio('https://www.myinstants.com/media/sounds/horeg-full-bass.mp3')
+    };
+    SOUNDS.disco.loop = true;
+
+    // --- UI EVENTS ---
+    function enableAudio() {
+        if (audioReady) return;
+        videoElement.muted = false;
+        videoElement.play().then(() => { videoElement.pause(); audioReady = true; }).catch(()=>{});
+        SOUNDS.jumpscare.load();
+        SOUNDS.disco.load();
+    }
+
+    document.getElementById('start-btn').addEventListener('click', () => {
+        enableAudio();
+        document.getElementById('guide-overlay').style.display = 'none';
+    });
+    
+    document.getElementById('btn-info').addEventListener('click', () => {
+        document.getElementById('guide-overlay').style.display = 'flex';
+        document.querySelector('#guide-overlay .start-btn').innerText = "LANJUTKAN";
+    });
+
+    // OPEN EDITOR & POPULATE
+    document.getElementById('btn-custom').addEventListener('click', () => {
+        const ov = document.getElementById('custom-overlay');
+        ov.style.display = 'flex';
+        const s = currentMapData.settings;
+        const t = currentMapData.textures;
+
+        // Textures
+        document.getElementById('inp-floor').value = t.floor;
+        document.getElementById('inp-wall').value = t.wall;
+        document.getElementById('inp-ceiling').value = t.ceiling;
+        document.getElementById('inp-anomali').value = t.anomalyImg;
+        document.getElementById('inp-watcher').value = t.watcherImg;
+
+        // Settings
+        document.getElementById('inp-prob').value = s.probability;
+        document.getElementById('prob-val').innerText = s.probability + "%";
+        
+        document.getElementById('chk-painting').checked = s.painting;
+        document.getElementById('chk-chaser').checked = s.chaser;
+        document.getElementById('chk-watcher').checked = s.watcher;
+        document.getElementById('chk-disco').checked = s.disco;
+
+        // New Settings
+        document.getElementById('inp-maxlvl').value = s.maxLevel || 8;
+        document.getElementById('val-maxlvl').innerText = s.maxLevel || 8;
+        
+        document.getElementById('inp-bright').value = s.brightness || 1.0;
+        document.getElementById('val-bright').innerText = s.brightness || 1.0;
+
+        document.getElementById('inp-dist').value = s.loopDistance || 45;
+        document.getElementById('val-dist').innerText = s.loopDistance || 45;
+
+        document.getElementById('inp-fog').value = s.fogDensity || 0.035;
+        document.getElementById('val-fog').innerText = s.fogDensity || 0.035;
+
+        document.getElementById('inp-spawnmode').value = s.spawnMode || 'random';
+    });
+
+    document.getElementById('close-custom').addEventListener('click', () => {
+        document.getElementById('custom-overlay').style.display = 'none';
+    });
+
+    // --- SAVE / LOAD LOGIC ---
+    async function saveMyMap() {
+        const newData = {
+            textures: {
+                floor: document.getElementById('inp-floor').value || DEFAULT_MAP_DATA.textures.floor,
+                wall: document.getElementById('inp-wall').value || DEFAULT_MAP_DATA.textures.wall,
+                ceiling: document.getElementById('inp-ceiling').value || DEFAULT_MAP_DATA.textures.ceiling,
+                anomalyImg: document.getElementById('inp-anomali').value || DEFAULT_MAP_DATA.textures.anomalyImg,
+                watcherImg: document.getElementById('inp-watcher').value || DEFAULT_MAP_DATA.textures.watcherImg,
+                speakerImg: DEFAULT_MAP_DATA.textures.speakerImg
+            },
+            settings: {
+                probability: parseInt(document.getElementById('inp-prob').value),
+                painting: document.getElementById('chk-painting').checked,
+                chaser: document.getElementById('chk-chaser').checked,
+                watcher: document.getElementById('chk-watcher').checked,
+                disco: document.getElementById('chk-disco').checked,
+                // New
+                maxLevel: parseInt(document.getElementById('inp-maxlvl').value),
+                brightness: parseFloat(document.getElementById('inp-bright').value),
+                loopDistance: parseInt(document.getElementById('inp-dist').value),
+                fogDensity: parseFloat(document.getElementById('inp-fog').value),
+                spawnMode: document.getElementById('inp-spawnmode').value
+            }
+        };
+
+        const btn = document.querySelector('.save-btn');
+        btn.innerText = "MENYIMPAN...";
+        
+        try {
+            await fetch(`${DB_URL}${deviceId}.json`, { method: 'PUT', body: JSON.stringify(newData) });
+            alert("Map Tersimpan!");
+            applyMapData(newData);
+        } catch (e) {
+            alert("Gagal: " + e.message);
+        } finally {
+            btn.innerText = "SIMPAN & TERAPKAN";
+        }
+    }
+
+    async function loadMapFromId() {
+        const target = document.getElementById('target-id').value.trim();
+        if(!target) return alert("Masukkan ID teman!");
+        const btn = document.querySelector('.load-btn');
+        btn.innerText = "LOADING...";
+        try {
+            const res = await fetch(`${DB_URL}${target}.json`);
+            const data = await res.json();
+            if(data) {
+                // Merge with default to ensure new fields exist for old saves
+                let mergedSettings = { ...DEFAULT_MAP_DATA.settings, ...(data.settings || {}) };
+                let mergedTextures = { ...DEFAULT_MAP_DATA.textures, ...(data.textures || data || {}) };
+                applyMapData({ textures: mergedTextures, settings: mergedSettings });
+                document.getElementById('custom-overlay').style.display = 'none';
+                alert("Map Loaded!");
+            } else alert("ID tidak ditemukan.");
+        } catch(e) { alert("Error: " + e.message); } 
+        finally { btn.innerText = "LOAD MAP"; }
+    }
+
+    function resetToDefault() {
+        if(confirm("Reset ke pengaturan awal?")) {
+            applyMapData(DEFAULT_MAP_DATA);
+            document.getElementById('custom-overlay').style.display = 'none';
+        }
+    }
+
+    function applyMapData(data) {
+        currentMapData = JSON.parse(JSON.stringify(data));
+        document.getElementById('loading').style.display = 'flex';
+        loadAssets().then(() => {
+            document.getElementById('loading').style.display = 'none';
+            restartGame();
+        });
+    }
+
+    // --- ASSETS ---
+    function loadAssets() {
+        return new Promise(async (resolve) => {
+            const texLoader = new THREE.TextureLoader();
+            const promises = Object.keys(currentMapData.textures).map(key => {
+                return new Promise(res => {
+                    texLoader.load(currentMapData.textures[key], 
+                        (tex) => {
+                            if(key === 'floor' || key === 'ceiling') {
+                                tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+                                tex.repeat.set(4, 20); tex.encoding = THREE.sRGBEncoding;
+                            }
+                            if(key === 'wall') {
+                                tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+                                tex.repeat.set(10, 2); tex.encoding = THREE.sRGBEncoding;
+                            }
+                            if(loadedTextures[key]) loadedTextures[key].dispose();
+                            loadedTextures[key] = tex;
+                            res();
+                        }, undefined, () => res() 
+                    );
+                });
+            });
+            await Promise.all(promises);
+            resolve();
+        });
+    }
+
+    function createTextTexture(text, bgColor, textColor) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512; canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = bgColor; ctx.fillRect(0,0,512,256);
+        ctx.font = 'bold 100px Arial'; ctx.fillStyle = textColor;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, 256, 128); ctx.strokeStyle = '#fff'; ctx.lineWidth = 5; ctx.strokeText(text, 256, 128);
+        return new THREE.CanvasTexture(canvas);
+    }
+
+    // --- MAIN GAME LOOP ---
+    async function init() {
+        await loadAssets();
+        videoTexture = new THREE.VideoTexture(videoElement);
+        videoTexture.minFilter = THREE.LinearFilter;
+        document.getElementById('loading').style.display = 'none';
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x020202);
+        
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 150);
+        camera.position.set(0, player.height, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); 
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        document.body.appendChild(renderer.domElement);
+
+        clock = new THREE.Clock();
+        setupInput();
+        buildLevel();
+        animate();
+        isInitialized = true;
+    }
+
+    function cleanScene() {
+        const toRemove = [];
+        scene.traverse(child => { if(child.isMesh || child.isLight) toRemove.push(child); });
+        toRemove.forEach(obj => scene.remove(obj));
+    }
+
+    function buildLevel() {
+        cleanScene();
+        
+        // Settings Vars
+        const settings = currentMapData.settings;
+        const loopDist = settings.loopDistance || 45;
+        const bright = settings.brightness || 1.0;
+        const fog = settings.fogDensity || 0.035;
+
+        // Apply Env Settings
+        scene.fog = new THREE.FogExp2(0x020202, fog);
+        
+        // Reset Logic
+        pursuerActive = false; pursuer = null;
+        isWatcherActive = false; watcher = null; hasWatcherJumpscared = false;
+        isDiscoActive = false; discoTriggered = false; discoObjects = []; levelLights = [];
+        SOUNDS.disco.pause(); SOUNDS.disco.currentTime = 0;
+        videoElement.pause(); videoElement.currentTime = 0;
+
+        // --- ANOMALY SPAWN LOGIC ---
+        isAnomaly = false;
+        
+        // Filter enabled types
+        const availableTypes = [];
+        if(settings.painting) availableTypes.push(0);
+        if(settings.chaser) availableTypes.push(1);
+        if(settings.watcher) availableTypes.push(2);
+        if(settings.disco) availableTypes.push(3);
+
+        if (currentLevel > 0 && availableTypes.length > 0) {
+            const chance = settings.probability / 100;
+            // Roll for existence
+            if (Math.random() < chance) {
+                isAnomaly = true;
+                const mode = settings.spawnMode || 'random';
+
+                if (mode === 'random') {
+                    // Avoid immediate repeat if possible
+                    let possible = availableTypes;
+                    if(availableTypes.length > 1 && lastAnomalyType !== -1) {
+                        possible = availableTypes.filter(t => t !== lastAnomalyType);
+                    }
+                    anomalyType = possible[Math.floor(Math.random() * possible.length)];
+                } 
+                else if (mode === 'sequence') {
+                    anomalyType = availableTypes[anomalySequenceIndex % availableTypes.length];
+                    anomalySequenceIndex++;
+                } 
+                else if (mode === 'bag') {
+                    // Remove disabled types from bag
+                    anomalyBag = anomalyBag.filter(t => availableTypes.includes(t));
+                    // Refill if empty
+                    if (anomalyBag.length === 0) {
+                        anomalyBag = [...availableTypes];
+                        // Shuffle
+                        for (let i = anomalyBag.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [anomalyBag[i], anomalyBag[j]] = [anomalyBag[j], anomalyBag[i]];
+                        }
+                    }
+                    anomalyType = anomalyBag.pop();
+                }
+
+                lastAnomalyType = anomalyType;
+                if(anomalyType === 3) isDiscoActive = true;
+            }
+        }
+
+        // --- BUILD GEOMETRY ---
+        const centerZ = 0;
+        
+        // Dynamic Floor & Ceiling based on loopDist
+        const floorGeo = new THREE.PlaneGeometry(7, loopDist * 2.5);
+        const wallGeo = new THREE.PlaneGeometry(loopDist * 2.5, 5.5);
+
+        const floor = new THREE.Mesh(floorGeo, new THREE.MeshStandardMaterial({ map: loadedTextures.floor, roughness: 0.6, color: 0x888888 }));
+        floor.rotation.x = -Math.PI / 2; floor.position.z = centerZ; scene.add(floor);
+
+        const ceil = new THREE.Mesh(floorGeo, new THREE.MeshStandardMaterial({ map: loadedTextures.ceiling, roughness: 0.5, color: 0x666666 }));
+        ceil.rotation.x = Math.PI / 2; ceil.position.y = 5; ceil.position.z = centerZ; scene.add(ceil);
+
+        const wallMat = new THREE.MeshStandardMaterial({ map: loadedTextures.wall, color: 0xaaaaaa, roughness: 0.8 });
+        const wallL = new THREE.Mesh(wallGeo, wallMat);
+        wallL.rotation.y = Math.PI / 2; wallL.position.set(-3.5, 2.5, centerZ); scene.add(wallL);
+        const wallR = new THREE.Mesh(wallGeo, wallMat);
+        wallR.rotation.y = -Math.PI / 2; wallR.position.set(3.5, 2.5, centerZ); scene.add(wallR);
+
+        // Lines
+        const lineGeo = new THREE.PlaneGeometry(7, 0.4);
+        const fLine = new THREE.Mesh(lineGeo, new THREE.MeshBasicMaterial({ color: 0x00ff00 }));
+        fLine.rotation.x = -Math.PI/2; fLine.position.set(0, 0.02, currentForwardDir * (loopDist - 2)); scene.add(fLine);
+        const bLine = new THREE.Mesh(lineGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+        bLine.rotation.x = -Math.PI/2; bLine.position.set(0, 0.02, -currentForwardDir * 5); scene.add(bLine);
+
+        // Lights & Neons
+        const neonGeo = new THREE.CylinderGeometry(0.05, 0.05, 4, 8);
+        const neonMat = new THREE.MeshBasicMaterial({ color: 0xe0ffff });
+        
+        // Spawn lights up to loop distance
+        const lightLimit = loopDist - 5;
+        for(let z = lightLimit; z > -lightLimit; z -= 10) {
+            const neon = new THREE.Mesh(neonGeo, neonMat.clone());
+            neon.rotation.z = Math.PI / 2; neon.position.set(0, 4.8, z);
+            scene.add(neon);
+            const light = new THREE.PointLight(0x00ffff, 0.8 * bright, 18);
+            light.position.set(0, 4.0, z);
+            scene.add(light);
+            levelLights.push({mesh: neon, light: light});
+        }
+        scene.add(new THREE.AmbientLight(0xffffff, 0.1 * bright));
+
+        // Spawn Objects
+        if(isAnomaly) {
+            if(anomalyType === 0) { // Painting
+                const p = new THREE.Mesh(new THREE.PlaneGeometry(2, 2.5), new THREE.MeshBasicMaterial({ map: loadedTextures.anomalyImg }));
+                p.position.set(-3.45, 2.2, currentForwardDir * (loopDist/3)); p.rotation.y = Math.PI/2; scene.add(p);
+            } 
+            else if (anomalyType === 1) { // Chaser
+                const pMat = new THREE.MeshBasicMaterial({ map: videoTexture, transparent: true, side: THREE.DoubleSide });
+                pursuer = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 6), pMat);
+                pursuer.position.set(0, 2.8, currentForwardDir * (loopDist + 8)); pursuer.visible = false; scene.add(pursuer);
+            }
+            else if (anomalyType === 2) { // Watcher
+                const wMat = new THREE.MeshBasicMaterial({ map: loadedTextures.watcherImg, transparent: true });
+                const wGeo = new THREE.PlaneGeometry(2, 3.5);
+                watcher = new THREE.Mesh(wGeo, wMat);
+                watcher.position.set(0, 1.75, currentForwardDir * (loopDist/2 + 5)); watcher.lookAt(0, 1.75, 0); 
+                const wl = new THREE.PointLight(0xff0000, 0.5 * bright, 5); wl.position.copy(watcher.position); wl.position.y+=1; scene.add(wl);
+                scene.add(watcher); isWatcherActive = true;
+            }
+            else if (anomalyType === 3) { // DISCO
+                prepareDiscoAssets();
+            }
+        }
+    }
+
+    function prepareDiscoAssets() {
+        const num1 = Math.floor(Math.random() * 9) + 1;
+        const num2 = Math.floor(Math.random() * 9) + 1;
+        const ans = num1 + num2;
+        const wrong = ans + (Math.random() > 0.5 ? 1 : -1);
+        const ansZ = (Math.random() > 0.5 ? 1 : -1); 
+        correctMathDir = ansZ; 
+
+        const probTex = createTextTexture(`${num1} + ${num2} = ?`, 'rgba(0,0,0,0.9)', '#ffff00');
+        const probMesh = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.5), new THREE.MeshBasicMaterial({ map: probTex, transparent:true }));
+        probMesh.rotation.x = -Math.PI/2; probMesh.position.set(0, 0.05, 0); probMesh.visible = false;
+        scene.add(probMesh); discoObjects.push(probMesh);
+
+        const spkGeo = new THREE.PlaneGeometry(4, 4);
+        const spkMat = new THREE.MeshBasicMaterial({ map: loadedTextures.speakerImg, transparent: true, side: THREE.DoubleSide });
+        
+        const spk1 = new THREE.Mesh(spkGeo, spkMat);
+        spk1.position.set(0, 2, 25); spk1.rotation.y = Math.PI; spk1.visible = false;
+        scene.add(spk1); discoObjects.push(spk1);
+        const spk2 = new THREE.Mesh(spkGeo, spkMat);
+        spk2.position.set(0, 2, -25); spk2.rotation.y = 0; spk2.visible = false;
+        scene.add(spk2); discoObjects.push(spk2);
+
+        const txtGeo = new THREE.PlaneGeometry(2, 1);
+        const ansTex1 = createTextTexture((ansZ===1?ans:wrong).toString(), 'rgba(0,0,0,0.5)', '#0f0');
+        const ansMesh1 = new THREE.Mesh(txtGeo, new THREE.MeshBasicMaterial({ map: ansTex1, transparent: true, side: THREE.DoubleSide }));
+        ansMesh1.position.set(0, 3, 20); ansMesh1.rotation.y = Math.PI; ansMesh1.visible = false;
+        scene.add(ansMesh1); discoObjects.push(ansMesh1);
+
+        const ansTex2 = createTextTexture((ansZ===1?wrong:ans).toString(), 'rgba(0,0,0,0.5)', '#f00');
+        const ansMesh2 = new THREE.Mesh(txtGeo, new THREE.MeshBasicMaterial({ map: ansTex2, transparent: true, side: THREE.DoubleSide }));
+        ansMesh2.position.set(0, 3, -20); ansMesh2.rotation.y = 0; ansMesh2.visible = false;
+        scene.add(ansMesh2); discoObjects.push(ansMesh2);
+    }
+
+    function updateLogic() {
+        if(isFinished) return;
+        const loopDist = currentMapData.settings.loopDistance || 45;
+        
+        // DISCO
+        if(isDiscoActive) {
+            if(!discoTriggered && Math.abs(camera.position.z) < 5) {
+                discoTriggered = true; SOUNDS.disco.play();
+                showMessage("DISCO TIME!", "#00ffff");
+                discoObjects.forEach(o => o.visible = true);
+            }
+            if(discoTriggered) {
+                if(camera.position.z > 15) {
+                    if(correctMathDir === 1) winDisco(); else gameOver("JAWABAN SALAH!");
+                } else if(camera.position.z < -15) {
+                    if(correctMathDir === -1) winDisco(); else gameOver("JAWABAN SALAH!");
+                }
+                return;
+            }
+        }
+
+        // CHASER
+        if(isAnomaly && anomalyType === 1 && pursuer) { 
+             const dist = Math.abs(camera.position.z);
+             if(!pursuerActive && dist > 10) {
+                 pursuerActive = true; pursuer.visible = true; videoElement.play(); showMessage("LARI!!!", "#f00");
+             }
+             if(pursuerActive) {
+                 const diff = camera.position.z - pursuer.position.z;
+                 pursuer.position.z += Math.sign(diff) * 0.085;
+                 pursuer.lookAt(camera.position.x, 2.8, camera.position.z);
+                 if(Math.abs(camera.position.z - pursuer.position.z) < 1) gameOver("TERTANGKAP.");
+             }
+        }
+
+        // WATCHER
+        if(isWatcherActive && watcher && !hasWatcherJumpscared) {
+            const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
+            const toWatcher = new THREE.Vector3().subVectors(watcher.position, camera.position).normalize();
+            if(camDir.dot(toWatcher) < -0.3) triggerWatcherJumpscare();
+        }
+
+        if (!isDiscoActive) {
+            const z = camera.position.z;
+            const limit = loopDist - 1;
+            
+            if ((currentForwardDir === -1 && z < -limit) || (currentForwardDir === 1 && z > limit)) {
+                if(!isAnomaly) nextLevel();
+                else gameOver("SALAH JALAN (ADA ANOMALI)");
+            } 
+            else if ((currentForwardDir === -1 && z > 5) || (currentForwardDir === 1 && z < -5)) {
+                if(isAnomaly) {
+                    showMessage("KEPUTUSAN BENAR", "#0f0");
+                    const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
+                    const logFwd = new THREE.Vector3(0,0,currentForwardDir);
+                    if(camDir.dot(logFwd) <= 0) currentForwardDir *= -1;
+                    nextLevel();
+                } else gameOver("SALAH (TIDAK ADA ANOMALI)");
+            }
+        }
+    }
+
+    function winDisco() {
+        SOUNDS.disco.pause();
+        const playerZ = camera.position.z;
+        if(playerZ > 0) currentForwardDir = 1; else currentForwardDir = -1;
+        showMessage("JAWABAN BENAR!", "#0f0");
+        nextLevel();
+    }
+
+    function triggerWatcherJumpscare() {
+        hasWatcherJumpscared = true;
+        SOUNDS.jumpscare.currentTime = 0; SOUNDS.jumpscare.play();
+        const offset = new THREE.Vector3(0,0,-0.8); offset.applyQuaternion(camera.quaternion);
+        watcher.position.copy(camera.position).add(offset); watcher.lookAt(camera.position); watcher.scale.set(1.5,1.5,1.5);
+        showMessage("JANGAN MENENGOK!", "#f00"); setTimeout(() => gameOver("MATI."), 800);
+    }
+
+    function gameOver(reason) {
+        currentLevel = 0; showMessage(reason, "#f00"); restartGame();
+    }
+
+    function nextLevel() {
+        currentLevel++;
+        const target = currentMapData.settings.maxLevel || 8;
+        if(currentLevel >= target) finishGame();
+        else { showMessage(`EXIT ${currentLevel}`, "#0f0"); teleportAndReset(); }
+    }
+
+    function finishGame() {
+        isFinished = true; document.getElementById('finish-screen').style.display = 'flex';
+    }
+
+    function restartGame() {
+        currentLevel = 0; lastAnomalyType = -1; currentForwardDir = -1; isFinished = false;
+        document.getElementById('finish-screen').style.display = 'none';
+        camera.position.set(0, player.height, 0); player.dir = 0; player.pitch = 0;
+        teleportAndReset(true);
+    }
+
+    function teleportAndReset(isReset = false) {
+        camera.position.z = 0;
+        document.body.style.backgroundColor = "#fff";
+        setTimeout(() => document.body.style.backgroundColor = "#000", 50);
+        updateUI(); buildLevel();
+    }
+
+    function showMessage(txt, col) {
+        const m = document.getElementById('message');
+        m.innerText = txt; m.style.color = col; m.style.opacity = 1; m.style.textShadow = `0 0 20px ${col}`;
+        setTimeout(() => m.style.opacity = 0, 2000);
+    }
+
+    function updateUI() {
+        document.getElementById('level-counter').innerText = `EXIT ${currentLevel}`;
+        const dir = currentForwardDir === -1 ? "UTARA" : "SELATAN";
+        document.getElementById('hint').innerText = `ARAH: ${dir}`;
+    }
+
+    // --- INPUT ---
+    function setupInput() {
+        const knob = document.getElementById('joystick-knob');
+        const container = document.getElementById('joystick-container');
+        
+        window.addEventListener('touchstart', e => {
+            if(isFinished) return; enableAudio(); 
+            for(let t of e.changedTouches) {
+                if(t.clientX < window.innerWidth/2) activeTouches.move = t.identifier;
+                else { activeTouches.look = t.identifier; lastLookPos = {x: t.clientX, y: t.clientY}; }
+            }
+        }, {passive:false});
+
+        window.addEventListener('touchmove', e => {
+            if(document.getElementById('custom-overlay').style.display === 'flex') return;
+            if(isFinished) return;
+            e.preventDefault(); 
+
+            for(let t of e.changedTouches) {
+                if(t.identifier === activeTouches.move) {
+                    const rect = container.getBoundingClientRect();
+                    const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+                    let dx = t.clientX - cx, dy = t.clientY - cy;
+                    const d = Math.min(Math.sqrt(dx*dx+dy*dy), 50);
+                    const a = Math.atan2(dy, dx);
+                    knob.style.transform = `translate(calc(-50% + ${Math.cos(a)*d}px), calc(-50% + ${Math.sin(a)*d}px))`;
+                    moveInput = {x: Math.cos(a)*d/50, y: Math.sin(a)*d/50};
+                }
+                if(t.identifier === activeTouches.look) {
+                    if(hasWatcherJumpscared) return;
+                    player.dir -= (t.clientX - lastLookPos.x) * player.rotSpeed * 0.5;
+                    player.pitch -= (t.clientY - lastLookPos.y) * player.rotSpeed * 0.5;
+                    player.pitch = Math.max(-1.4, Math.min(1.4, player.pitch));
+                    lastLookPos = {x: t.clientX, y: t.clientY};
+                }
+            }
+        }, {passive:false});
+
+        const end = e => {
+            for(let t of e.changedTouches) {
+                if(t.identifier === activeTouches.move) { activeTouches.move=null; moveInput={x:0,y:0}; knob.style.transform='translate(-50%,-50%)'; }
+                if(t.identifier === activeTouches.look) activeTouches.look=null;
+            }
+        };
+        window.addEventListener('touchend', end); window.addEventListener('touchcancel', end);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        if(!isInitialized || isFinished) return;
+
+        camera.rotation.order = 'YXZ'; camera.rotation.y = player.dir; camera.rotation.x = player.pitch;
+
+        if(!hasWatcherJumpscared) {
+            const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); fwd.y=0; fwd.normalize();
+            const side = new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion); side.y=0; side.normalize();
+            camera.position.addScaledVector(fwd, -moveInput.y * player.speed);
+            camera.position.addScaledVector(side, moveInput.x * player.speed);
+            camera.position.x = Math.max(-2.7, Math.min(2.7, camera.position.x));
+            camera.position.y = (moveInput.x||moveInput.y) ? player.height + Math.sin(clock.getElapsedTime()*10)*0.05 : THREE.MathUtils.lerp(camera.position.y, player.height, 0.1);
+        }
+
+        if(isDiscoActive && discoTriggered) {
+            const time = clock.getElapsedTime();
+            const hue = (time * 0.5) % 1;
+            levelLights.forEach((l, idx) => {
+                const blink = Math.sin(time * 10 + idx) > 0;
+                l.light.color.setHSL((hue + idx*0.1)%1, 1, 0.5);
+                l.light.intensity = blink ? 1.5 : 0.2;
+                l.mesh.material.color.setHSL((hue + idx*0.1)%1, 1, 0.5);
+            });
+        }
+
+        updateLogic();
+        renderer.render(scene, camera);
+    }
+
+    init();
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
