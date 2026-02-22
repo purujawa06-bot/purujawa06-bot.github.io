@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puruboy Shortener</title>
+    <style>
+        :root { --accent: #00d2ff; --bg: #0a0a0c; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        
+        .container { width: 90%; max-width: 400px; text-align: center; }
+        
+        /* Animasi Liquid PURU */
+        .puru-wrapper { position: relative; display: inline-block; margin-bottom: 2rem; }
+        .puru-base { font-size: 5rem; font-weight: 900; color: #1a1a1a; letter-spacing: 8px; margin: 0; position: relative; }
+        .puru-fill { position: absolute; top: 0; left: 0; width: 0; height: 100%; color: var(--accent); overflow: hidden; white-space: nowrap; font-size: 5rem; font-weight: 900; letter-spacing: 8px; border-right: 4px solid var(--accent); transition: width 3s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 0 15px var(--accent)); }
+
+        input { width: 100%; padding: 15px; border-radius: 12px; border: 1px solid #333; background: #151518; color: white; margin-bottom: 1rem; box-sizing: border-box; outline: none; }
+        button { width: 100%; padding: 15px; border-radius: 12px; border: none; background: var(--accent); color: #000; font-weight: 900; cursor: pointer; transition: 0.3s; }
+        button:hover { transform: scale(1.02); filter: brightness(1.1); }
+
+        .short-res { margin-top: 1.5rem; background: #151518; padding: 15px; border-radius: 12px; display: none; border: 1px solid var(--accent); }
+        .hidden { display: none; }
+        .glitch-text { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; color: var(--accent); margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="create-view">
+        <h1 style="letter-spacing: -1px; margin-bottom: 0.5rem;">PURUBOY <span style="color:var(--accent)">LINK</span></h1>
+        <p style="opacity: 0.5; font-size: 0.9rem; margin-bottom: 2rem;">Kamus Shortener Mandiri</p>
+        
+        <input type="url" id="target-url" placeholder="https://youtube.com/c/puruboy">
+        <button onclick="generateShort()">GENERATE SHORT CODE</button>
+
+        <div id="result" class="short-res">
+            <small style="opacity:0.6">Link Hasil Kamus:</small>
+            <p id="final-link" style="font-weight: bold; color: var(--accent); margin: 10px 0; font-size: 1.1rem;"></p>
+            <button onclick="copyLink()" style="padding: 8px; font-size: 0.7rem; background: #fff;">SALIN LINK</button>
+        </div>
+    </div>
+
+    <div id="redirect-view" class="hidden">
+        <div class="puru-wrapper">
+            <div class="puru-base">PURU</div>
+            <div id="filler" class="puru-fill">PURU</div>
+        </div>
+        <div class="glitch-text" id="status-label">Mendekripsi Kamus...</div>
+    </div>
+</div>
+
+<script>
+    // Kamus Kecil: Hanya untuk encode/decode dasar agar link awal bisa dikirim
+    const encode = (str) => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const decode = (str) => decodeURIComponent(escape(atob(str.replace(/-/g, '+').replace(/_/g, '/'))));
+
+    function generateShort() {
+        const url = document.getElementById('target-url').value;
+        if(!url.includes('http')) return alert('Masukkan URL valid!');
+
+        // Buat kode unik super pendek (misal 4 karakter)
+        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+        
+        // Simpan ke Kamus Browser (LocalStorage)
+        localStorage.setItem(`puru_${code}`, url);
+
+        // Buat link yang "membawa" data asli untuk pertama kali
+        const finalUrl = `${window.location.origin}${window.location.pathname}#p=${code}&d=${encode(url)}`;
+        
+        document.getElementById('final-link').innerText = finalUrl;
+        document.getElementById('result').style.display = 'block';
+    }
+
+    function copyLink() {
+        navigator.clipboard.writeText(document.getElementById('final-link').innerText);
+        alert('Tersalin ke Kamus!');
+    }
+
+    window.onload = () => {
+        const params = new URLSearchParams(window.location.hash.replace('#', '?'));
+        const code = params.get('p');
+        const data = params.get('d');
+
+        if (code) {
+            let targetURL = localStorage.getItem(`puru_${code}`);
+
+            // Jika di kamus belum ada (karena dibuka orang lain), ambil dari data 'd' dan simpan
+            if (!targetURL && data) {
+                targetURL = decode(data);
+                localStorage.setItem(`puru_${code}`, targetURL);
+            }
+
+            if (targetURL) {
+                // Jalankan Animasi
+                document.getElementById('create-view').classList.add('hidden');
+                document.getElementById('redirect-view').classList.remove('hidden');
+                
+                setTimeout(() => {
+                    document.getElementById('filler').style.width = '100%';
+                    document.getElementById('status-label').innerText = "Mengalirkan Data...";
+                }, 100);
+
+                setTimeout(() => {
+                    window.location.href = targetURL;
+                }, 3200);
+            } else {
+                alert('Link kadaluarsa atau tidak valid!');
+                window.location.hash = '';
+                location.reload();
+            }
+        }
+    };
+</script>
+
+</body>
+</html>
