@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puruboy Redirect</title>
+    <style>
+        :root { --primary: #00d2ff; --secondary: #3a7bd5; --dark: #1a1a2e; }
+        body { margin: 0; font-family: 'Inter', sans-serif; background: var(--dark); color: white; display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+        
+        .card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); padding: 2rem; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); width: 100%; max-width: 380px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+        
+        /* Animasi Liquid Text PURU */
+        .logo-container { position: relative; display: inline-block; margin-bottom: 1.5rem; }
+        .puru-text { font-size: 5rem; font-weight: 900; letter-spacing: 5px; margin: 0; position: relative; color: #333; -webkit-text-stroke: 1px rgba(255,255,255,0.1); }
+        .puru-text::before { content: "PURU"; position: absolute; top: 0; left: 0; width: 0; height: 100%; color: var(--primary); overflow: hidden; border-right: 3px solid var(--primary); transition: width 3s linear; filter: drop-shadow(0 0 15px var(--primary)); }
+        .loading-active .puru-text::before { width: 100%; animation: wave 1s infinite alternate; }
+        
+        @keyframes wave { from { filter: drop-shadow(0 0 5px var(--primary)); } to { filter: drop-shadow(0 0 25px var(--primary)); } }
+
+        input { width: 100%; padding: 14px; border-radius: 12px; border: none; background: rgba(255,255,255,0.1); color: white; margin-bottom: 1rem; box-sizing: border-box; outline: none; transition: 0.3s; }
+        input:focus { background: rgba(255,255,255,0.2); box-shadow: 0 0 0 2px var(--primary); }
+        
+        button { width: 100%; padding: 14px; border-radius: 12px; border: none; background: linear-gradient(45deg, var(--primary), var(--secondary)); color: white; font-weight: bold; cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
+        button:hover { transform: translateY(-2px); opacity: 0.9; }
+
+        .result-box { margin-top: 1.5rem; display: none; padding: 10px; background: rgba(0,210,255,0.1); border-radius: 8px; font-size: 0.8rem; word-break: break-all; border: 1px dashed var(--primary); }
+        .hidden { display: none; }
+        .status { font-size: 0.9rem; opacity: 0.7; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="card" id="app">
+    <div id="creator-ui">
+        <h2 style="margin-top:0">Shorten It.</h2>
+        <input type="url" id="url-input" placeholder="Paste target URL...">
+        <button onclick="makeLink()">Generate Link</button>
+        <div id="res-box" class="result-box">
+            <p id="res-url"></p>
+            <button onclick="copy()" style="padding: 5px; font-size: 0.7rem;">Copy Link</button>
+        </div>
+    </div>
+
+    <div id="redirect-ui" class="hidden">
+        <div class="logo-container" id="logo-box">
+            <h1 class="puru-text">PURU</h1>
+        </div>
+        <p class="status" id="stat-text">Decrypting secure link...</p>
+    </div>
+</div>
+
+<script>
+    const b64 = {
+        enc: (s) => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+        dec: (s) => atob(s.replace(/-/g, '+').replace(/_/g, '/'))
+    };
+
+    function makeLink() {
+        const url = document.getElementById('url-input').value;
+        if(!url.startsWith('http')) return alert('URL must start with http/https');
+        
+        const short = window.location.origin + window.location.pathname + '#p=' + b64.enc(url);
+        document.getElementById('res-url').innerText = short;
+        document.getElementById('res-box').style.display = 'block';
+    }
+
+    function copy() {
+        navigator.clipboard.writeText(document.getElementById('res-url').innerText);
+        alert('Copied!');
+    }
+
+    window.onload = () => {
+        const hash = window.location.hash;
+        if (hash.startsWith('#p=')) {
+            const target = b64.dec(hash.split('=')[1]);
+            
+            // Switch UI
+            document.getElementById('creator-ui').classList.add('hidden');
+            document.getElementById('redirect-ui').classList.remove('hidden');
+            
+            // Start Liquid Animation
+            setTimeout(() => {
+                document.getElementById('logo-box').classList.add('loading-active');
+                document.getElementById('stat-text').innerText = "Streaming data...";
+            }, 100);
+
+            // Redirect after 3 seconds (duration of liquid fill)
+            setTimeout(() => {
+                window.location.href = target;
+            }, 3500);
+        }
+    };
+</script>
+
+</body>
+</html>
