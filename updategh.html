@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Manager Pro - Batch Sync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        }
+        .modal-enter { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .refresh-spin { animation: spin 1s linear infinite; }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <!-- Custom Modal System -->
+    <div id="modalOverlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-80 hidden p-4">
+        <div id="modalContent" class="glass p-6 rounded-2xl w-full max-w-sm border border-gray-700 modal-enter text-center">
+            <h3 id="modalTitle" class="text-xl font-bold mb-2 text-white">Konfirmasi</h3>
+            <p id="modalMessage" class="text-gray-400 mb-6 text-sm"></p>
+            <div id="modalButtons" class="flex flex-col gap-2"></div>
+        </div>
+    </div>
+
+    <!-- Auth Overlay -->
+    <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-95 hidden p-4">
+        <div class="glass p-8 rounded-2xl w-full max-w-md border border-gray-700 shadow-2xl text-center">
+            <h2 class="text-2xl font-bold mb-4 text-white">GitHub Access Token</h2>
+            <p class="text-sm mb-6 text-gray-400">Masukkan Token GitHub Anda untuk memulai. Aplikasi tidak akan melakukan refresh otomatis saat menyimpan.</p>
+            <!-- Menggunakan div, bukan form untuk mencegah auto-submit/refresh -->
+            <div class="space-y-4">
+                <input type="password" id="ghTokenInput" placeholder="ghp_xxxxxxxxxxxx" class="w-full p-3 rounded bg-gray-900 border border-gray-700 text-white outline-none focus:border-blue-500">
+                <button type="button" onclick="saveToken(event)" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow-lg">
+                    Simpan & Hubungkan
+                </button>
+            </div>
+            <div class="mt-4 text-[10px] text-gray-500">Token Anda disimpan secara lokal di browser (localStorage).</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="mainApp" class="max-w-5xl mx-auto opacity-0 transition-opacity duration-500">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white">GitHub Manager</h1>
+                <p class="text-gray-400 mt-1" id="userInfo">Memuat data pengguna...</p>
+            </div>
+            <div class="flex gap-2 w-full md:w-auto">
+                <button id="refreshBtn" onclick="fetchRepos()" class="flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm transition">
+                    <svg id="refreshIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Refresh
+                </button>
+                <button onclick="logoutPrompt()" class="bg-red-900 bg-opacity-20 text-red-400 border border-red-900 px-4 py-2 rounded-md text-sm">Logout</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <section class="glass p-6 rounded-xl shadow-lg">
+                <h3 class="font-bold mb-4 text-blue-400 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path></svg>
+                    Repo Baru
+                </h3>
+                <div class="space-y-4">
+                    <input type="text" id="newRepoName" placeholder="Nama repo..." class="w-full p-2.5 rounded bg-gray-900 border border-gray-700 text-sm">
+                    <div class="flex items-center gap-2 bg-gray-800 p-2 rounded">
+                        <input type="checkbox" id="isPrivate" class="w-4 h-4">
+                        <label for="isPrivate" class="text-sm cursor-pointer select-none">Private Repository</label>
+                    </div>
+                    <button onclick="createRepo()" id="btnCreate" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-md transition">Buat Repo</button>
+                </div>
+            </section>
+
+            <section class="glass p-6 rounded-xl lg:col-span-2 shadow-lg">
+                <h3 class="font-bold mb-4 text-purple-400 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                    Batch Sync (ZIP to GitHub)
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-4">
+                        <label class="text-[10px] text-gray-500 uppercase font-bold">Pilih Repo Target</label>
+                        <input type="text" id="targetRepo" placeholder="Nama repo target..." class="w-full p-2.5 rounded bg-gray-900 border border-gray-700 text-sm">
+                        <label class="text-[10px] text-gray-500 uppercase font-bold">File ZIP Sumber</label>
+                        <input type="file" id="zipFile" accept=".zip" class="w-full text-xs text-gray-400 file:bg-purple-600 file:text-white file:border-0 file:py-2 file:px-4 file:rounded file:mr-2 cursor-pointer">
+                    </div>
+                    <div class="flex flex-col justify-end">
+                        <button onclick="handleBatchSync()" id="btnUpload" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-md shadow-lg transition">
+                            Upload Batch ZIP
+                        </button>
+                        <p class="text-[10px] text-gray-500 mt-2 italic leading-tight">Repo akan diupdate agar isinya persis sama dengan isi ZIP (Atomic Update).</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="mt-10">
+            <h3 class="text-xl font-bold mb-6 flex items-center gap-3">
+                <span id="repoCount" class="bg-gray-700 text-white text-xs px-2 py-1 rounded-full">0</span>
+                Daftar Repositori
+            </h3>
+            <div id="repoList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Data will be loaded here -->
+            </div>
+        </section>
+    </div>
+
+    <div id="toast" class="fixed bottom-4 right-4 p-4 rounded-lg hidden z-[110] text-white shadow-2xl font-bold transition-all duration-300"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+        eruda.init();
+        let GITHUB_TOKEN = localStorage.getItem('gh_token');
+        let USERNAME = "";
+
+        window.onload = () => {
+            if (!GITHUB_TOKEN) {
+                document.getElementById('authOverlay').classList.remove('hidden');
+            } else {
+                validateAndInit();
+            }
+        };
+
+        // --- Auth Logic Fix ---
+        function saveToken(e) {
+            if(e) e.preventDefault(); // Mencegah refresh jika dipanggil dari form
+            
+            const val = document.getElementById('ghTokenInput').value.trim();
+            if (!val) {
+                showToast("Token tidak boleh kosong", "error");
+                return;
+            }
+
+            // Simpan ke local storage
+            localStorage.setItem('gh_token', val);
+            GITHUB_TOKEN = val;
+            
+            // Sembunyikan overlay dan inisialisasi tanpa refresh halaman
+            document.getElementById('authOverlay').classList.add('hidden');
+            validateAndInit();
+        }
+
+        async function validateAndInit() {
+            try {
+                const data = await ghReq("user");
+                USERNAME = data.login;
+                document.getElementById('userInfo').innerHTML = `User: <span class="text-white font-bold">${USERNAME}</span>`;
+                
+                // Tampilkan UI utama
+                const mainApp = document.getElementById('mainApp');
+                mainApp.classList.remove('opacity-0');
+                
+                fetchRepos();
+                showToast(`Selamat datang, ${USERNAME}!`, "success");
+            } catch (err) {
+                console.error("Validation error:", err);
+                showToast("Token tidak valid. Silakan coba lagi.", "error");
+                localStorage.removeItem('gh_token');
+                document.getElementById('authOverlay').classList.remove('hidden');
+            }
+        }
+
+        // --- UI Utilities ---
+        function showToast(msg, type = "info") {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.className = `fixed bottom-4 right-4 p-4 rounded-lg z-[110] text-white shadow-2xl font-bold transition-all ${
+                type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-blue-600'
+            }`;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        function showCustomModal(title, message, options = []) {
+            const overlay = document.getElementById('modalOverlay');
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalMessage').innerText = message;
+            const btnContainer = document.getElementById('modalButtons');
+            btnContainer.innerHTML = '';
+            
+            if (options.length === 0) options = [{ text: "Tutup", className: "bg-blue-600" }];
+            
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.innerText = opt.text;
+                btn.className = `p-2 rounded text-white font-bold transition ${opt.className || "bg-gray-700 hover:bg-gray-600"}`;
+                btn.onclick = () => {
+                    overlay.classList.add('hidden');
+                    if (opt.callback) opt.callback();
+                };
+                btnContainer.appendChild(btn);
+            });
+            overlay.classList.remove('hidden');
+        }
+
+        function toggleLoading(id, isLoading) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            if (isLoading) {
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+                btn.dataset.origText = btn.innerText;
+                btn.innerText = "Processing...";
+            } else {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.innerText = btn.dataset.origText || btn.innerText;
+            }
+        }
+
+        // --- GitHub API Helper ---
+        async function ghReq(endpoint, method = "GET", body = null) {
+            const options = {
+                method,
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                }
+            };
+            if (body) options.body = JSON.stringify(body);
+            
+            const res = await fetch(`https://api.github.com/${endpoint}`, options);
+            
+            if (res.status === 204) return true;
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Request failed");
+            return data;
+        }
+
+        // --- Feature Logics ---
+        async function fetchRepos() {
+            const icon = document.getElementById('refreshIcon');
+            icon.classList.add('refresh-spin');
+            try {
+                const repos = await ghReq("user/repos?sort=updated&per_page=100&type=owner");
+                document.getElementById('repoCount').innerText = repos.length;
+                
+                const container = document.getElementById('repoList');
+                if(repos.length === 0) {
+                    container.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500">Belum ada repositori.</div>';
+                } else {
+                    container.innerHTML = repos.map(repo => `
+                        <div class="glass p-4 rounded-xl flex flex-col justify-between border border-transparent hover:border-blue-500 transition-all group shadow-md">
+                            <div class="mb-4">
+                                <div class="font-bold text-white truncate group-hover:text-blue-400 transition-colors">${repo.name}</div>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-[9px] text-gray-500 uppercase border border-gray-700 px-1 rounded">${repo.private ? '🔒 Private' : '🌐 Public'}</span>
+                                    <span class="text-[9px] text-gray-600 italic">Update: ${new Date(repo.updated_at).toLocaleDateString()}</span>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="selectRepo('${repo.name}')" class="flex-1 text-xs bg-blue-600 hover:bg-blue-500 py-1.5 rounded transition font-semibold">Pilih</button>
+                                <button onclick="deleteRepoConfirm('${repo.name}')" class="flex-1 text-xs bg-red-900 bg-opacity-30 hover:bg-opacity-100 py-1.5 rounded text-red-300 transition border border-red-900 border-opacity-30">Hapus</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                showToast("Gagal memuat repositori", "error");
+            } finally {
+                setTimeout(() => icon.classList.remove('refresh-spin'), 600);
+            }
+        }
+
+        function selectRepo(name) {
+            document.getElementById('targetRepo').value = name;
+            showToast(`Repo "${name}" siap disinkronisasi`);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function createRepo() {
+            const nameInput = document.getElementById('newRepoName');
+            const name = nameInput.value.trim();
+            if (!name) return showToast("Nama repo wajib diisi", "error");
+            
+            toggleLoading('btnCreate', true);
+            try {
+                await ghReq("user/repos", "POST", { 
+                    name, 
+                    private: document.getElementById('isPrivate').checked, 
+                    auto_init: true 
+                });
+                showToast("Repositori berhasil dibuat!", "success");
+                nameInput.value = "";
+                fetchRepos();
+            } catch (err) {
+                showCustomModal("Gagal Membuat Repo", err.message);
+            } finally {
+                toggleLoading('btnCreate', false);
+            }
+        }
+
+        function deleteRepoConfirm(name) {
+            showCustomModal("Hapus Repositori", `Apakah Anda yakin ingin menghapus "${name}" secara permanen? Data tidak bisa dipulihkan.`, [
+                { text: "Ya, Hapus", className: "bg-red-600 hover:bg-red-700", callback: async () => {
+                    try {
+                        await ghReq(`repos/${USERNAME}/${name}`, "DELETE");
+                        showToast("Repositori berhasil dihapus", "success");
+                        fetchRepos();
+                    } catch (err) { 
+                        showCustomModal("Gagal Menghapus", "Pastikan token Anda memiliki izin 'delete_repo'.");
+                    }
+                }},
+                { text: "Batal", className: "bg-gray-700" }
+            ]);
+        }
+
+        async function handleBatchSync() {
+            const repoName = document.getElementById('targetRepo').value.trim();
+            const fileInput = document.getElementById('zipFile');
+            
+            if (!repoName || fileInput.files.length === 0) {
+                return showToast("Pilih repositori target dan file ZIP dahulu", "error");
+            }
+
+            toggleLoading('btnUpload', true);
+            try {
+                showToast("Mengekstrak file ZIP...");
+                const zip = await new JSZip().loadAsync(fileInput.files[0]);
+                const files = [];
+                for (let path in zip.files) {
+                    if (!zip.files[path].dir) {
+                        const content = await zip.files[path].async("base64");
+                        files.push({ path, content });
+                    }
+                }
+
+                if (files.length === 0) throw new Error("File ZIP kosong.");
+
+                showToast("Menganalisis branch...");
+                const repoInfo = await ghReq(`repos/${USERNAME}/${repoName}`);
+                const branch = repoInfo.default_branch;
+                const ref = await ghReq(`repos/${USERNAME}/${repoName}/git/refs/heads/${branch}`);
+                const baseSha = ref.object.sha;
+
+                showToast(`Mengunggah ${files.length} file...`);
+                const blobPromises = files.map(f => 
+                    ghReq(`repos/${USERNAME}/${repoName}/git/blobs`, "POST", {
+                        content: f.content,
+                        encoding: "base64"
+                    }).then(res => ({ path: f.path, sha: res.sha }))
+                );
+                const blobs = await Promise.all(blobPromises);
+
+                showToast("Menyusun tree repositori...");
+                const treeRes = await ghReq(`repos/${USERNAME}/${repoName}/git/trees`, "POST", {
+                    tree: blobs.map(b => ({
+                        path: b.path,
+                        mode: "100644",
+                        type: "blob",
+                        sha: b.sha
+                    }))
+                });
+
+                showToast("Finalisasi commit...");
+                const commitRes = await ghReq(`repos/${USERNAME}/${repoName}/git/commits`, "POST", {
+                    message: `Sync via Web Manager: ${new Date().toLocaleString()}`,
+                    tree: treeRes.sha,
+                    parents: [baseSha]
+                });
+
+                await ghReq(`repos/${USERNAME}/${repoName}/git/refs/heads/${branch}`, "PATCH", {
+                    sha: commitRes.sha,
+                    force: true
+                });
+
+                showToast("Batch Sync berhasil diselesaikan!", "success");
+                fileInput.value = "";
+                fetchRepos();
+            } catch (err) {
+                console.error(err);
+                showCustomModal("Gagal Sinkronisasi", err.message);
+            } finally {
+                toggleLoading('btnUpload', false);
+            }
+        }
+
+        function logoutPrompt() {
+            showCustomModal("Konfirmasi Logout", "Keluar akan menghapus token dari browser ini.", [
+                { text: "Ya, Logout", className: "bg-red-600", callback: () => {
+                    localStorage.removeItem('gh_token');
+                    location.reload();
+                }},
+                { text: "Batal" }
+            ]);
+        }
+    </script>
+</body>
+</html>
+
