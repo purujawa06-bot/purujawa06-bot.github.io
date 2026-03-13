@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PuruAI Minimalist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        :root { color-scheme: dark; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #050505; 
+            color: #e5e7eb; /* Lebih terang secara default */
+            margin: 0; padding: 0;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #262626; border-radius: 10px; }
+        #chat-container { display: flex; flex-direction: column; gap: 2rem; overflow-y: auto; scroll-behavior: smooth; }
+        .overlay { backdrop-filter: blur(25px); background-color: rgba(0,0,0,0.95); }
+        textarea:focus { box-shadow: none !important; }
+        
+        .think-block {
+            border-left: 2px solid #4f46e5; /* Indigo yang lebih terang */
+            background: rgba(30, 27, 75, 0.3);
+            padding: 10px 14px;
+            margin-bottom: 1rem;
+            color: #a1a1aa; /* Zinc-400, lebih terbaca */
+            font-size: 0.85rem;
+            font-style: italic;
+            border-radius: 0 8px 8px 0;
+            white-space: pre-wrap;
+        }
+        .exec-block {
+            background: #09090b;
+            border: 1px solid #3730a3; /* Indigo-800 */
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: #a5b4fc; /* Indigo-300 */
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Minimalist Start Screen -->
+    <div id="init-modal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 overlay">
+        <div class="max-w-sm w-full text-center">
+            <div class="flex justify-center gap-6 mb-12">
+                <button onclick="createNewProject()" class="group flex flex-col items-center gap-3">
+                    <div class="w-16 h-16 rounded-full border border-neutral-700 flex items-center justify-center group-hover:border-indigo-400 transition-all bg-neutral-900/50">
+                        <i data-lucide="plus" class="w-6 h-6 text-neutral-400 group-hover:text-indigo-300"></i>
+                    </div>
+                    <span class="text-[11px] uppercase tracking-widest text-neutral-400 font-medium group-hover:text-indigo-200">New</span>
+                </button>
+                <button onclick="document.getElementById('zip-upload').click()" class="group flex flex-col items-center gap-3">
+                    <div class="w-16 h-16 rounded-full border border-neutral-700 flex items-center justify-center group-hover:border-indigo-400 transition-all bg-neutral-900/50">
+                        <i data-lucide="upload-cloud" class="w-6 h-6 text-neutral-400 group-hover:text-indigo-300"></i>
+                    </div>
+                    <span class="text-[11px] uppercase tracking-widest text-neutral-400 font-medium group-hover:text-indigo-200">Upload</span>
+                </button>
+            </div>
+            <input type="file" id="zip-upload" accept=".zip" class="hidden" onchange="handleZipUpload(event)">
+        </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div id="app-content" class="flex-1 flex flex-col min-h-0 opacity-0 transition-opacity duration-1000 pointer-events-none">
+        
+        <!-- Header -->
+        <header class="p-6 flex justify-between items-center border-b border-neutral-900 bg-[#050505] z-10">
+            <div class="flex items-center gap-4">
+                <div id="project-status" class="text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+                    Sistem Inisialisasi
+                </div>
+            </div>
+            <button onclick="downloadZip()" class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors">
+                <i data-lucide="download" class="w-4 h-4"></i> Export
+            </button>
+        </header>
+
+        <main id="chat-container" class="flex-1 min-h-0 px-8 py-8 custom-scrollbar">
+            <!-- Feed -->
+        </main>
+
+        <!-- Input -->
+        <footer class="p-6 bg-gradient-to-t from-[#050505] to-transparent">
+            <div class="max-w-4xl mx-auto relative flex items-center bg-neutral-900/60 rounded-xl border border-neutral-800 p-2 focus-within:border-indigo-500/50 transition-colors">
+                <textarea id="user-input" rows="1" 
+                    class="w-full bg-transparent border-none focus:ring-0 py-3 pl-4 pr-12 text-gray-100 text-[15px] resize-none placeholder:text-neutral-500 custom-scrollbar"
+                    placeholder="Instruksikan AI untuk mengelola file..."></textarea>
+                <button id="send-btn" onclick="handleInput()" class="absolute right-3 p-2 text-neutral-400 hover:text-indigo-400 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-all">
+                    <i data-lucide="arrow-up" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        let zip = new JSZip();
+        let history = []; 
+
+        const systemPrompt = `
+Identitas: PuruAI Professional.
+Aturan Penting:
+1. Konteks percakapan saat ini dibatasi maksimal 10 pesan terakhir. Jika lupa detail file, ANDA WAJIB MENGGUNAKAN perintah <execution>ls</execution> atau <execution>cat nama_file</execution>.
+2. Format Respons:
+<think>
+[Proses berpikir analitis Anda]
+</think>
+<execution>
+[Satu perintah terminal tunggal]
+</execution>
+3. COMMAND YANG DIIZINKAN HANYA: mv, rm, stop, cat, ls, mkdir.
+   Semua command selain ini akan diblokir oleh sistem!
+   - Tulis/buat file: cat << EOF >> nama_file\\n[ISI FILE]\\nEOF
+   - Baca file: cat nama_file
+   - Buat folder: mkdir nama_folder
+   - Pindah/Rename: mv sumber tujuan
+   - Hapus: rm target
+   - Selesai tugas: stop
+4. Satu respons maksimal satu blok <think> dan satu blok <execution>.
+`;
+
+        function initIcons() { lucide.createIcons(); }
+
+        function createNewProject() {
+            history.push({ role: "bot", text: "<think>Memulai sesi baru sesuai permintaan user.</think>\nProyek kosong telah siap." });
+            finalizeInit("Workspace_New");
+        }
+
+        async function handleZipUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            try {
+                zip = await JSZip.loadAsync(file);
+                history.push({ role: "bot", text: `<think>Berkas ZIP berhasil dimuat.</think>\nBerkas '${file.name}' siap diproses.` });
+                finalizeInit(file.name);
+            } catch (err) { 
+                console.error("Zip loading error:", err);
+                const container = document.getElementById('chat-container');
+                container.innerHTML += `<div class="text-red-400 text-sm p-4 text-center">Error loading ZIP file.</div>`;
+            }
+        }
+
+        function finalizeInit(projName) {
+            document.getElementById('init-modal').classList.add('hidden');
+            const content = document.getElementById('app-content');
+            content.classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('project-status').innerText = projName;
+            initIcons(); renderHistory();
+            setTimeout(() => document.getElementById('user-input').focus(), 500);
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('chat-container');
+            container.innerHTML = history.map(m => `
+                <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} w-full max-w-5xl mx-auto">
+                    <div class="${m.role === 'user' ? 'max-w-[80%]' : 'max-w-full w-full'}">
+                        ${m.role === 'user' ? 
+                            `<div class="text-right text-[10px] font-bold text-neutral-500 mb-1.5 uppercase tracking-widest">User</div>
+                             <div class="bg-neutral-900/80 border border-neutral-800 rounded-2xl rounded-tr-sm px-5 py-3.5 text-right text-[15px] text-gray-100 whitespace-pre-wrap leading-relaxed">${escapeHtml(m.text)}</div>` : 
+                            
+                            `<div class="text-left text-[10px] font-bold text-indigo-400 mb-1.5 uppercase tracking-widest">PuruAI</div>
+                             <div class="text-left text-[15px] text-gray-200 leading-relaxed">${formatResponse(m.text)}</div>`
+                        }
+                    </div>
+                </div>
+            `).join('');
+            initIcons(); 
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function formatResponse(text) {
+            if (!text) return "";
+            let html = escapeHtml(text);
+            html = html.replace(/\*\*(.*?)\*\*/g, '<span class="text-white font-semibold">$1</span>');
+            html = html.replace(/&lt;think&gt;([\s\S]*?)&lt;\/think&gt;/g, '<div class="think-block">$1</div>');
+            html = html.replace(/&lt;execution&gt;([\s\S]*?)&lt;\/execution&gt;/g, '<div class="exec-block">$&gt; $1</div>');
+            return html;
+        }
+
+        function escapeHtml(text) { 
+            if (typeof text !== 'string') return '';
+            return text.replace(/</g, "&lt;").replace(/>/g, "&gt;"); 
+        }
+
+        async function executeTerminal(cmd) {
+            cmd = cmd.trim();
+            if (cmd === "stop") return "TERM_STOP";
+
+            // Validasi Command (Hanya yang diizinkan)
+            const baseCmd = cmd.split(" ")[0];
+            const allowedCmds = ["ls", "cat", "rm", "mv", "mkdir", "stop"];
+
+            if (!allowedCmds.includes(baseCmd)) {
+                return "Command blocked! Jangan gunakan command selain mv rm stop cat ls mkdir";
+            }
+
+            try {
+                if (baseCmd === "ls") {
+                    let files = [];
+                    // Tampilkan file dan folder
+                    zip.forEach((path, file) => { files.push(path); });
+                    return files.length > 0 ? files.join("\n") : "Directory is empty";
+                }
+                
+                // Menangani penulisan file dengan cat << EOF
+                if (cmd.startsWith("cat << EOF >>")) {
+                    const match = cmd.match(/cat << EOF >> (.*)\n([\s\S]*)\nEOF/);
+                    if (match) {
+                        const filename = match[1].trim();
+                        const content = match[2];
+                        zip.file(filename, content);
+                        return `File written: ${filename}`;
+                    } else {
+                        return "Error: format penulisan file salah. Gunakan: cat << EOF >> nama_file\\nisi\\nEOF";
+                    }
+                }
+                
+                // Menangani baca file murni
+                if (baseCmd === "cat") {
+                    const f = cmd.replace("cat ", "").trim();
+                    const content = zip.file(f);
+                    return content ? await content.async("string") : `Error: File '${f}' not found`;
+                }
+                
+                if (baseCmd === "rm") {
+                    const f = cmd.replace("rm ", "").trim();
+                    zip.remove(f);
+                    return `Removed: ${f}`;
+                }
+                
+                if (baseCmd === "mv") {
+                    const p = cmd.split(" ");
+                    if (p.length < 3) return "Error: mv needs source and destination (e.g., mv old.txt new.txt)";
+                    const contentFile = zip.file(p[1]);
+                    if (!contentFile) return `Error: source file '${p[1]}' not found`;
+                    const contentData = await contentFile.async("uint8array");
+                    zip.file(p[2], contentData); 
+                    zip.remove(p[1]);
+                    return `Moved ${p[1]} to ${p[2]}`;
+                }
+
+                if (baseCmd === "mkdir") {
+                    const dirName = cmd.replace("mkdir ", "").trim();
+                    if (!dirName) return "Error: mkdir needs a directory name";
+                    zip.folder(dirName);
+                    return `Directory created: ${dirName}/`;
+                }
+
+            } catch (e) { 
+                return `Error executing command: ${e.message}`; 
+            }
+            
+            return "Command execution failed internally.";
+        }
+
+        function buildPrompt() {
+            const contextLimit = 10;
+            const recentHistory = history.slice(-contextLimit);
+            
+            let promptString = `${systemPrompt}\n\n[RIWAYAT PERCAKAPAN (Max ${contextLimit})]\n`;
+            recentHistory.forEach(m => {
+                const roleName = m.role === 'user' ? 'User' : 'PuruAI';
+                promptString += `${roleName}:\n${m.text}\n\n`;
+            });
+            promptString += "PuruAI:\n";
+            return promptString;
+        }
+
+        async function fetchAIStream(retries = 5, backoff = 1000) {
+            const apiUrl = "https://www.puruboy.kozow.com/api/ai/notegpt";
+            const promptStr = buildPrompt();
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        prompt: promptStr,
+                        model: "gemini-3-flash-preview",
+                        chat_mode: "standard"
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                history.push({ role: "bot", text: "" });
+                const currentMsgIndex = history.length - 1;
+                let fullText = "";
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); 
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const jsonStr = line.substring(6).trim();
+                            if (!jsonStr) continue;
+                            
+                            try {
+                                const data = JSON.parse(jsonStr);
+                                if (data.text) {
+                                    fullText += data.text;
+                                    history[currentMsgIndex].text = fullText;
+                                    renderHistory();
+                                }
+                                
+                                if (data.done || data.type === "finish") {
+                                    if (fullText.trim() === "") {
+                                        throw new Error("EMPTY_FINISH");
+                                    }
+                                }
+                            } catch (e) {
+                                if (e.message === "EMPTY_FINISH") throw e; 
+                            }
+                        }
+                    }
+                }
+                return fullText;
+
+            } catch (err) {
+                if (err.message === "EMPTY_FINISH" || err.message.includes("Failed to fetch")) {
+                    if (retries > 0) {
+                        console.warn(`Stream failed. Retrying in ${backoff}ms... (${retries} retries left)`);
+                        history.pop(); 
+                        renderHistory();
+                        await new Promise(r => setTimeout(r, backoff));
+                        return fetchAIStream(retries - 1, backoff * 2); 
+                    }
+                }
+                
+                history[history.length - 1].text = `[Sistem API Error]: ${err.message}`;
+                renderHistory();
+                return null;
+            }
+        }
+
+        async function handleInput() {
+            const inputEl = document.getElementById('user-input');
+            const val = inputEl.value.trim();
+            if (!val) return;
+            
+            history.push({ role: "user", text: val });
+            inputEl.value = ""; 
+            inputEl.style.height = "auto";
+            renderHistory(); 
+            startAILoop();
+        }
+
+        async function startAILoop() {
+            const sendBtn = document.getElementById('send-btn');
+            const inputEl = document.getElementById('user-input');
+            
+            sendBtn.disabled = true;
+            inputEl.disabled = true;
+            
+            try {
+                while (true) {
+                    const botMsg = await fetchAIStream();
+                    if (!botMsg) break; 
+                    
+                    const match = botMsg.match(/<execution>([\s\S]*?)<\/execution>/);
+                    if (match) {
+                        const resTerminal = await executeTerminal(match[1]);
+                        if (resTerminal === "TERM_STOP") break;
+                        
+                        history.push({ role: "user", text: `[SYSTEM RESULT]:\n${resTerminal}` });
+                        renderHistory();
+                        await new Promise(r => setTimeout(r, 800)); // Jeda sebelum lanjut baca hasil
+                        continue;
+                    } else { 
+                        break; 
+                    }
+                }
+            } finally { 
+                sendBtn.disabled = false; 
+                inputEl.disabled = false;
+                inputEl.focus();
+            }
+        }
+
+        async function downloadZip() {
+            const blob = await zip.generateAsync({type: "blob"});
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = `PuruAI_Export_${Date.now()}.zip`; a.click();
+        }
+
+        document.getElementById('user-input').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        });
+        
+        document.getElementById('user-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleInput();
+            }
+        });
+
+        window.onload = initIcons;
+    </script>
+</body>
+</html>
