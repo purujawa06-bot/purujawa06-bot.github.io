@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PuruAI - Mobile Zip Editor</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- JSZip -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <style>
+        /* Custom scrollbar hidden for mobile feel, but kept functional */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        .blink { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.3; } }
+        body { -webkit-tap-highlight-color: transparent; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans h-[100dvh] flex flex-col overflow-hidden" x-data="puruApp()">
+
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 p-3 flex justify-between items-center shrink-0 z-20 shadow-md">
+        <div class="flex items-center gap-2">
+            <div class="w-7 h-7 bg-blue-500 rounded flex items-center justify-center font-bold text-white text-sm">P</div>
+            <h1 class="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-400">PuruAI</h1>
+        </div>
+        <div class="flex items-center gap-2 text-xs font-medium text-gray-400 bg-gray-900 px-3 py-1.5 rounded-full">
+            <span class="w-2 h-2 rounded-full" :class="statusColor"></span>
+            <span x-text="statusText"></span>
+        </div>
+    </header>
+
+    <!-- SETUP SCREEN -->
+    <div x-show="screen === 'setup'" x-transition.opacity class="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
+        <div class="w-full max-w-sm bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700">
+            <div class="text-center mb-6">
+                <h2 class="text-xl font-bold text-white mb-2">Mulai Project</h2>
+                <p class="text-gray-400 text-xs">Pilih mode untuk memulai. PuruAI akan mengelola file Anda secara otonom.</p>
+            </div>
+            
+            <button @click="startFreshProject()" class="w-full mb-5 bg-blue-600 active:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-blue-500/20">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Buat Project Baru
+            </button>
+
+            <div class="relative flex items-center py-2 mb-5">
+                <div class="flex-grow border-t border-gray-700"></div>
+                <span class="flex-shrink-0 mx-4 text-gray-500 text-xs font-medium">ATAU</span>
+                <div class="flex-grow border-t border-gray-700"></div>
+            </div>
+
+            <label for="zipUpload" class="w-full cursor-pointer bg-gray-700 active:bg-gray-600 border border-dashed border-gray-500 text-white font-medium py-4 px-4 rounded-xl transition-all flex flex-col items-center justify-center gap-2">
+                <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span class="text-sm">Upload File ZIP</span>
+                <span class="text-[10px] text-gray-400">Maksimal 10MB</span>
+            </label>
+            <input type="file" id="zipUpload" accept=".zip" class="hidden" @change="handleZipUpload($event)">
+        </div>
+    </div>
+
+    <!-- WORKSPACE SCREEN -->
+    <main x-show="screen === 'workspace'" class="flex-1 relative flex flex-col overflow-hidden bg-[#0d1117]">
+        
+        <!-- Tab: Chat -->
+        <div x-show="activeTab === 'chat'" class="flex-1 flex flex-col overflow-hidden relative">
+            <!-- Chat Messages -->
+            <div id="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4 pb-20 scroll-smooth">
+                <template x-for="(msg, index) in chatHistory" :key="index">
+                    <div class="p-3.5 rounded-xl max-w-[90%] border text-sm"
+                         :class="{
+                            'bg-blue-900/30 border-blue-800 ml-auto': msg.role === 'user',
+                            'bg-gray-800/80 border-gray-600 font-mono text-xs text-yellow-300': msg.role === 'system',
+                            'bg-gray-800 border-gray-700 mr-auto': msg.role === 'ai'
+                         }">
+                        <div class="font-bold text-[11px] mb-1.5 uppercase tracking-wider"
+                             :class="{
+                                'text-blue-400': msg.role === 'user',
+                                'text-yellow-500': msg.role === 'system',
+                                'text-teal-400': msg.role === 'ai'
+                             }" x-text="msg.role === 'user' ? 'You' : (msg.role === 'system' ? 'System Log' : 'PuruAI')">
+                        </div>
+                        <div class="whitespace-pre-wrap leading-relaxed break-words" x-text="msg.text"></div>
+                    </div>
+                </template>
+                <!-- Download Button inside chat when done -->
+                <div x-show="statusType === 'done'" class="pt-4 flex justify-center">
+                    <button @click="downloadZip()" class="bg-green-600 active:bg-green-700 text-white px-6 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg flex items-center gap-2 animate-bounce">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Download ZIP Sekarang
+                    </button>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="absolute bottom-0 left-0 w-full bg-gray-900 border-t border-gray-800 p-3 z-10 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.5)]">
+                <div class="flex gap-2">
+                    <input type="text" x-model="userInput" @keypress.enter="sendInitialPrompt()" 
+                           :disabled="isLooping"
+                           placeholder="Instruksikan AI (cth: Buat bot WA)..." 
+                           class="flex-1 bg-gray-800 text-white border border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50">
+                    <button @click="sendInitialPrompt()" :disabled="!userInput.trim() || isLooping" 
+                            class="bg-blue-600 active:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white px-4 py-2.5 rounded-xl font-semibold transition-all">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Files Explorer -->
+        <div x-show="activeTab === 'files'" class="flex-1 flex flex-col bg-gray-900 overflow-hidden">
+            <div class="p-3 border-b border-gray-800 bg-gray-800 text-xs font-semibold text-gray-400 flex justify-between">
+                <span>VIRTUAL FILE SYSTEM</span>
+                <span class="bg-gray-700 px-2 py-0.5 rounded text-gray-300">#root/</span>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2">
+                <template x-if="filesList.length === 0">
+                    <div class="text-center text-gray-600 text-sm mt-10 italic">Tidak ada file.</div>
+                </template>
+                <template x-for="file in filesList" :key="file">
+                    <div class="flex items-center gap-3 py-2 px-3 border-b border-gray-800 text-sm text-gray-300 break-all">
+                        <svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        <span x-text="file"></span>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </main>
+
+    <!-- BOTTOM NAVBAR -->
+    <nav x-show="screen === 'workspace'" class="bg-gray-800 border-t border-gray-700 flex justify-around items-center h-14 shrink-0 pb-safe z-30 shadow-[0_-5px_10px_rgba(0,0,0,0.2)]">
+        <button @click="activeTab = 'chat'" class="flex-1 flex flex-col items-center justify-center gap-1 h-full transition-colors" :class="activeTab === 'chat' ? 'text-blue-400' : 'text-gray-500'">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            <span class="text-[10px] font-medium">Chat</span>
+        </button>
+        <button @click="activeTab = 'files'" class="flex-1 flex flex-col items-center justify-center gap-1 h-full transition-colors relative" :class="activeTab === 'files' ? 'text-blue-400' : 'text-gray-500'">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+            <span class="text-[10px] font-medium">Files (<span x-text="filesList.length"></span>)</span>
+        </button>
+    </nav>
+
+    <!-- MAIN APP LOGIC -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('puruApp', () => ({
+                // --- State ---
+                screen: 'setup', 
+                activeTab: 'chat', 
+                statusText: 'Idle',
+                statusType: 'idle', 
+                isLooping: false,
+                vfs: {},
+                
+                // chatHistory: untuk tampilan UI
+                // aiMemory: untuk memori murni AI yang tidak dibatasi & bisa dihapus saat stop
+                chatHistory: [],
+                aiMemory: [],
+                
+                userInput: '',
+                
+                // --- Config ---
+                API_URL: 'https://puruboy-api.vercel.app/api/ai/gemini-v2',
+                BASE_DELAY: 3000,
+                SYSTEM_PROMPT: `Anda adalah PuruAI, agen programmer otonom. Anda mengelola sistem file virtual.
+Tugas Anda: Jalankan perintah user dengan memodifikasi file.
+ATURAN SANGAT KETAT:
+1. Anda HANYA BOLEH menggunakan TEPAT SATU tag <execution> dalam setiap respon.
+2. Jangan menggabungkan dua eksekusi. Tunggu balasan log sistem sebelum melanjutkan.
+3. Struktur direktori diawali dengan #root/.
+
+Format Perintah yang diizinkan (Pilih salah satu):
+- Melihat semua file: <execution>all <path>#root/</path></execution>
+- Membaca file: <execution>read <path>#root/namafile.js</path></execution>
+- Membuat/Edit file: <execution>write <path>#root/namafile.js</path> <content>Isi kode disini</content></execution>
+- Menghapus file: <execution>remove <path>#root/namafile.js</path></execution>
+- Selesai (Jika semua tugas sudah komplit): <execution>stop</execution>
+
+Jelaskan singkat apa yang Anda lakukan, lalu berikan 1 tag execution.`,
+
+                // --- Getters ---
+                get filesList() {
+                    return Object.keys(this.vfs).sort();
+                },
+
+                get statusColor() {
+                    const colors = {
+                        idle: 'bg-gray-500',
+                        active: 'bg-blue-500 blink',
+                        error: 'bg-red-500 blink',
+                        done: 'bg-green-500'
+                    };
+                    return colors[this.statusType] || 'bg-gray-500';
+                },
+
+                // --- Initialization ---
+                init() {
+                    // Auto scroll chat when history changes
+                    this.$watch('chatHistory', () => {
+                        this.$nextTick(() => {
+                            const chatEl = document.getElementById('chatContainer');
+                            if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
+                        });
+                    });
+                },
+
+                // --- UI Helpers ---
+                setStatus(text, type = 'idle') {
+                    this.statusText = text;
+                    this.statusType = type;
+                },
+
+                // Menyimpan log ke tampilan dan ke ingatan AI
+                addMsg(role, text, saveToMemory = true) {
+                    this.chatHistory.push({ role, text });
+                    if(saveToMemory) {
+                        this.aiMemory.push({ role, text });
+                    }
+                },
+
+                // --- Setup Actions ---
+                startFreshProject() {
+                    this.vfs = {};
+                    this.chatHistory = [];
+                    this.aiMemory = [];
+                    this.screen = 'workspace';
+                    this.addMsg('system', "Mode Project Baru dimulai. VFS Kosong.", false);
+                },
+
+                async handleZipUpload(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    try {
+                        this.setStatus('Mengekstrak...', 'active');
+                        const jszip = new JSZip();
+                        const zip = await jszip.loadAsync(file);
+                        
+                        let tempVFS = {};
+                        for (const relativePath in zip.files) {
+                            const zipEntry = zip.files[relativePath];
+                            if (!zipEntry.dir) {
+                                tempVFS[relativePath] = await zipEntry.async("string");
+                            }
+                        }
+                        
+                        this.vfs = tempVFS;
+                        this.chatHistory = [];
+                        this.aiMemory = [];
+                        this.screen = 'workspace';
+                        this.addMsg('system', `Berhasil memuat ZIP: ${file.name}. Total: ${this.filesList.length} file.`, false);
+                        this.setStatus('Idle', 'idle');
+
+                    } catch (err) {
+                        alert("Gagal membaca ZIP: " + err.message);
+                        this.setStatus('Idle', 'idle');
+                    }
+                    event.target.value = ''; // Reset input
+                },
+
+                // --- Execution Logic ---
+                cleanPath(p) {
+                    return p.replace('#root/', '').trim();
+                },
+
+                executeCommand(commandStr) {
+                    try {
+                        const execMatch = commandStr.match(/<execution>([\s\S]*?)<\/execution>/i);
+                        if (!execMatch) return null;
+                        
+                        const cmdBody = execMatch[1].trim();
+                        let log = "";
+
+                        if (cmdBody === 'stop') {
+                            return { action: 'stop', log: "Berhasil dihentikan. Siap untuk diunduh." };
+                        }
+
+                        if (cmdBody.startsWith('all')) {
+                            const files = this.filesList;
+                            log = files.length === 0 ? "Project kosong." : "Daftar file:\n" + files.join('\n');
+                            return { action: 'all', log: `Berhasil membaca struktur.\n${log}` };
+                        }
+
+                        if (cmdBody.startsWith('read')) {
+                            const pathMatch = cmdBody.match(/<path>(.*?)<\/path>/i);
+                            if (!pathMatch) throw new Error("Tag <path> tidak ditemukan.");
+                            const path = this.cleanPath(pathMatch[1]);
+                            
+                            if (this.vfs[path] !== undefined) {
+                                return { action: 'read', log: `Isi dari ${path}:\n${this.vfs[path]}` };
+                            } else {
+                                throw new Error(`File ${path} tidak ditemukan.`);
+                            }
+                        }
+
+                        if (cmdBody.startsWith('write')) {
+                            const pathMatch = cmdBody.match(/<path>(.*?)<\/path>/i);
+                            const contentMatch = cmdBody.match(/<content>([\s\S]*?)<\/content>/i);
+                            if (!pathMatch || !contentMatch) throw new Error("Tag <path> atau <content> tidak lengkap.");
+                            
+                            const path = this.cleanPath(pathMatch[1]);
+                            const content = contentMatch[1];
+                            
+                            // Reactivity update
+                            this.vfs = { ...this.vfs, [path]: content };
+                            return { action: 'write', log: `Berhasil menulis ke file ${path}.` };
+                        }
+
+                        if (cmdBody.startsWith('remove')) {
+                            const pathMatch = cmdBody.match(/<path>(.*?)<\/path>/i);
+                            if (!pathMatch) throw new Error("Tag <path> tidak ditemukan.");
+                            const path = this.cleanPath(pathMatch[1]);
+                            
+                            if (this.vfs[path] !== undefined) {
+                                let newVfs = { ...this.vfs };
+                                delete newVfs[path];
+                                this.vfs = newVfs; // Trigger reactivity
+                                return { action: 'remove', log: `File ${path} berhasil dihapus.` };
+                            } else {
+                                throw new Error(`File ${path} tidak ditemukan.`);
+                            }
+                        }
+
+                        throw new Error("Perintah tidak dikenali.");
+                    } catch (error) {
+                        return { action: 'error', log: `ERROR: ${error.message}` };
+                    }
+                },
+
+                // --- AI Network Call ---
+                async fetchAI(promptText) {
+                    const response = await fetch(this.API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: promptText })
+                    });
+                    if (!response.ok) throw new Error("API Timeout / Gangguan Jaringan.");
+                    const data = await response.json();
+                    return data.result.answer;
+                },
+
+                // --- Agent Loop ---
+                async sendInitialPrompt() {
+                    const val = this.userInput.trim();
+                    if (!val) return;
+                    
+                    if (this.statusType === 'done') this.setStatus('Idle', 'idle');
+
+                    this.userInput = '';
+                    this.addMsg('user', val);
+                    this.startAgentLoop(val);
+                },
+
+                async startAgentLoop(initialPrompt) {
+                    this.isLooping = true;
+                    this.activeTab = 'chat'; // Memastikan tab chat terbuka
+                    let errorCount = 0;
+
+                    // Context VFS tidak pernah di potong
+                    const vfsContext = this.filesList.length === 0 ? 'Kosong' : this.filesList.join(', ');
+                    let basePayload = `${this.SYSTEM_PROMPT}\n\n[Context VFS Saat Ini: ${vfsContext}]\n\n`;
+
+                    while (this.isLooping) {
+                        try {
+                            this.setStatus('Berpikir...', 'active');
+                            
+                            // Murni seluruh memory AI tanpa slice / batasan
+                            const historyLog = this.aiMemory.map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n');
+                            const fullPrompt = `${basePayload}Riwayat:\n${historyLog}\n\nPuruAI, berikan tindakan Anda selanjutnya!`;
+                            
+                            const aiResponse = await this.fetchAI(fullPrompt);
+                            this.addMsg('ai', aiResponse);
+
+                            const execResult = this.executeCommand(aiResponse);
+                            
+                            if (execResult) {
+                                if (execResult.action === 'stop') {
+                                    // Hanya tampilkan UI log (saveToMemory = false)
+                                    this.addMsg('system', "Agent selesai. Semua ingatan AI telah dihapus (File VFS tetap aman). Anda dapat mendownload atau memberi instruksi baru.", false);
+                                    
+                                    // PENGHAPUSAN MEMORI MURNI AI
+                                    this.aiMemory = []; 
+                                    
+                                    this.setStatus('Selesai', 'done');
+                                    this.isLooping = false;
+                                    break;
+                                } else {
+                                    this.addMsg('system', `SystemLog (${execResult.action}): ${execResult.log}`);
+                                    errorCount = 0; // Reset error counter
+                                }
+                            } else {
+                                this.addMsg('system', "SystemLog (Warning): Tidak ada tag <execution> valid ditemukan.");
+                            }
+
+                            this.setStatus(`Jeda ${this.BASE_DELAY/1000}s...`, 'idle');
+                            await new Promise(r => setTimeout(r, this.BASE_DELAY));
+
+                        } catch (error) {
+                            errorCount++;
+                            const backoffDelay = this.BASE_DELAY * Math.pow(2, errorCount);
+                            const errMsg = `SystemLog (API Error): ${error.message}. Retry dalam ${backoffDelay/1000}s (Ke-${errorCount})`;
+                            
+                            this.addMsg('system', errMsg);
+                            this.setStatus(`Error. Wait ${backoffDelay/1000}s`, 'error');
+                            
+                            await new Promise(r => setTimeout(r, backoffDelay));
+                            
+                            if(errorCount > 4) {
+                                this.addMsg('system', "Terlalu banyak error. Loop dihentikan paksa.", false);
+                                this.setStatus('Terhenti', 'idle');
+                                this.isLooping = false;
+                                break;
+                            }
+                        }
+                    }
+                },
+
+                // --- Download File ZIP via Blob ---
+                async downloadZip() {
+                    try {
+                        this.setStatus('Membuat ZIP...', 'active');
+                        const zip = new JSZip();
+                        
+                        for (const [path, content] of Object.entries(this.vfs)) {
+                            zip.file(path, content);
+                        }
+
+                        const blob = await zip.generateAsync({ type: "blob" });
+                        const url = window.URL.createObjectURL(blob);
+                        
+                        const a = document.createElement("a");
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = `PuruAI_Project_${new Date().getTime()}.zip`;
+                        document.body.appendChild(a);
+                        a.click();
+                        
+                        setTimeout(() => {
+                            document.body.removeChild(a);
+                            window.URL.revokeObjectURL(url);
+                        }, 100);
+                        
+                        this.setStatus('Selesai', 'done');
+                        this.addMsg('system', 'ZIP berhasil diunduh. Aplikasi akan mereset percakapan dari awal dalam 3 detik.', false);
+                        
+                        setTimeout(() => {
+                            location.reload();
+                        }, 3000);
+
+                    } catch(e) {
+                        alert("Gagal membuat ZIP: " + e.message);
+                        this.setStatus('Idle', 'idle');
+                    }
+                }
+            }));
+        });
+    </script>
+</body>
+</html>
