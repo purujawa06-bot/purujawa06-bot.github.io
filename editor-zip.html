@@ -125,7 +125,11 @@
                 <template x-for="file in filesList" :key="file">
                     <div class="flex items-center gap-3 py-2 px-3 border-b border-gray-800 text-sm text-gray-300 break-all">
                         <svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                        <span x-text="file"></span>
+                        <span x-text="file" class="flex-1"></span>
+                        <!-- Indicator for binary files -->
+                        <template x-if="vfs[file].isBinary">
+                            <span class="text-[10px] bg-gray-700 px-1.5 py-0.5 rounded text-gray-400">Media</span>
+                        </template>
                     </div>
                 </template>
             </div>
@@ -154,6 +158,8 @@
                 statusText: 'Idle',
                 statusType: 'idle', 
                 isLooping: false,
+                
+                // VFS format: { "path/to/file": { isBinary: boolean, data: string | Uint8Array } }
                 vfs: {},
                 
                 // chatHistory: untuk tampilan UI
@@ -222,6 +228,13 @@ Jelaskan singkat apa yang Anda lakukan, lalu berikan 1 tag execution.`,
                     }
                 },
 
+                // Cek Ekstensi Media / Binary
+                isBinaryFile(filename) {
+                    const ext = filename.split('.').pop().toLowerCase();
+                    const binExts = ['png', 'jpg', 'jpeg', 'gif', 'ico', 'webp', 'mp3', 'wav', 'ogg', 'mp4', 'webm', 'ttf', 'woff', 'woff2', 'eot', 'pdf'];
+                    return binExts.includes(ext);
+                },
+
                 // --- Setup Actions ---
                 startFreshProject() {
                     this.vfs = {};
@@ -244,7 +257,15 @@ Jelaskan singkat apa yang Anda lakukan, lalu berikan 1 tag execution.`,
                         for (const relativePath in zip.files) {
                             const zipEntry = zip.files[relativePath];
                             if (!zipEntry.dir) {
-                                tempVFS[relativePath] = await zipEntry.async("string");
+                                // Deteksi file media/binary
+                                const isBin = this.isBinaryFile(relativePath);
+                                // Jika binary baca sebagai raw binary (uint8array) agar tidak corrupt
+                                const content = await zipEntry.async(isBin ? "uint8array" : "string");
+                                
+                                tempVFS[relativePath] = {
+                                    isBinary: isBin,
+                                    data: content
+                                };
                             }
                         }
                         
@@ -290,8 +311,13 @@ Jelaskan singkat apa yang Anda lakukan, lalu berikan 1 tag execution.`,
                             if (!pathMatch) throw new Error("Tag <path> tidak ditemukan.");
                             const path = this.cleanPath(pathMatch[1]);
                             
-                            if (this.vfs[path] !== undefined) {
-                                return { action: 'read', log: `Isi dari ${path}:\n${this.vfs[path]}` };
+                            const fileObj = this.vfs[path];
+                            if (fileObj !== undefined) {
+                                // Proteksi agar AI tidak membaca karakter binary jadi garbage string
+                                if (fileObj.isBinary) {
+                                    return { action: 'read', log: `Isi dari ${path}:\n[File Binary/Media tidak dapat dibaca sebagai teks]` };
+                                }
+                                return { action: 'read', log: `Isi dari ${path}:\n${fileObj.data}` };
                             } else {
                                 throw new Error(`File ${path} tidak ditemukan.`);
                             }
@@ -305,8 +331,8 @@ Jelaskan singkat apa yang Anda lakukan, lalu berikan 1 tag execution.`,
                             const path = this.cleanPath(pathMatch[1]);
                             const content = contentMatch[1];
                             
-                            // Reactivity update
-                            this.vfs = { ...this.vfs, [path]: content };
+                            // Karena ditulis oleh AI, asumsikan itu selalu file text (kode)
+                            this.vfs = { ...this.vfs, [path]: { isBinary: false, data: content } };
                             return { action: 'write', log: `Berhasil menulis ke file ${path}.` };
                         }
 
@@ -380,7 +406,7 @@ Jelaskan singkat apa yang Anda lakukan, lalu berikan 1 tag execution.`,
                             if (execResult) {
                                 if (execResult.action === 'stop') {
                                     // Hanya tampilkan UI log (saveToMemory = false)
-                                    this.addMsg('system', "Agent selesai. Semua ingatan AI telah dihapus (File VFS tetap aman). Anda dapat mendownload atau memberi instruksi baru.", false);
+                                    this.addMsg('system', "Agent selesai. Semua ingatan AI telah dihapus (File VFS & Media tetap aman). Anda dapat mendownload atau memberi instruksi baru.", false);
                                     
                                     // PENGHAPUSAN MEMORI MURNI AI
                                     this.aiMemory = []; 
@@ -425,8 +451,10 @@ Jelaskan singkat apa yang Anda lakukan, lalu berikan 1 tag execution.`,
                         this.setStatus('Membuat ZIP...', 'active');
                         const zip = new JSZip();
                         
-                        for (const [path, content] of Object.entries(this.vfs)) {
-                            zip.file(path, content);
+                        // Memasukkan isi VFS ke ZIP dengan memperhatikan tipe datanya
+                        for (const [path, fileObj] of Object.entries(this.vfs)) {
+                            // JSZip butuh parameter khusus jika kita ingin memasukkan data binary murni
+                            zip.file(path, fileObj.data, { binary: fileObj.isBinary });
                         }
 
                         const blob = await zip.generateAsync({ type: "blob" });
