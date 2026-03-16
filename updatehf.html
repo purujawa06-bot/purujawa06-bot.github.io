@@ -3,431 +3,270 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hugging Face Manager Pro - Batch Sync</title>
+    <title>HF Manager Pro - Fixed</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        .glass {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        body {
-            background-color: #0b0f19;
-            color: #c9d1d9;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-        }
-        .modal-enter { animation: fadeIn 0.2s ease-out; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        body { background-color: #0b0f19; color: #c9d1d9; font-family: 'Inter', sans-serif; }
+        .hf-yellow { color: #FFD21E; }
+        .bg-hf-yellow { background-color: #FFD21E; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .refresh-spin { animation: spin 1s linear infinite; }
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        /* Custom scrollbar untuk tampilan pro */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0b0f19; }
-        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
 
-    <!-- Custom Modal System -->
-    <div id="modalOverlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-80 hidden p-4">
-        <div id="modalContent" class="glass p-6 rounded-2xl w-full max-w-sm border border-gray-700 modal-enter text-center">
-            <h3 id="modalTitle" class="text-xl font-bold mb-2 text-white">Konfirmasi</h3>
-            <p id="modalMessage" class="text-gray-400 mb-6 text-sm"></p>
-            <div id="modalButtons" class="flex flex-col gap-2"></div>
-        </div>
-    </div>
-
     <!-- Auth Overlay -->
-    <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-95 hidden p-4">
-        <div class="glass p-8 rounded-2xl w-full max-w-md border border-gray-700 shadow-2xl text-center">
+    <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 hidden p-4">
+        <div class="glass p-8 rounded-2xl w-full max-w-md border border-gray-700 text-center">
             <div class="text-5xl mb-4">🤗</div>
-            <h2 class="text-2xl font-bold mb-4 text-white">Hugging Face Access Token</h2>
-            <p class="text-sm mb-6 text-gray-400">Masukkan <strong>User Access Token</strong> (Write) Hugging Face Anda. Token tidak dikirim ke server pihak ketiga.</p>
-            <div class="space-y-4">
-                <input type="password" id="hfTokenInput" placeholder="hf_xxxxxxxxxxxxxxxxxxxx" class="w-full p-3 rounded bg-gray-900 border border-gray-700 text-white outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 transition">
-                <button type="button" onclick="saveToken(event)" class="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 rounded-lg transition shadow-lg">
-                    Simpan & Hubungkan
-                </button>
-            </div>
-            <div class="mt-4 text-[10px] text-gray-500">Disimpan secara lokal di browser (localStorage).</div>
+            <h2 class="text-2xl font-bold mb-4 text-white">Hugging Face Token</h2>
+            <p class="text-sm mb-6 text-gray-400">Masukkan <b>User Access Token (Write)</b> untuk mengelola repositori Anda.</p>
+            <input type="password" id="hfTokenInput" placeholder="hf_xxxxxxxxxxxx" class="w-full p-3 rounded bg-gray-900 border border-gray-700 text-white mb-4 outline-none focus:border-yellow-500">
+            <button onclick="saveToken()" class="w-full bg-hf-yellow hover:bg-yellow-600 text-black font-bold py-3 rounded-lg transition">Hubungkan Sekarang</button>
         </div>
     </div>
 
-    <!-- Main Content -->
-    <div id="mainApp" class="max-w-5xl mx-auto opacity-0 transition-opacity duration-500">
-        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4 border-b border-gray-800 pb-6">
+    <div id="mainApp" class="max-w-6xl mx-auto opacity-0 transition-opacity duration-500">
+        <header class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4 border-b border-gray-800 pb-8">
             <div>
-                <h1 class="text-3xl font-extrabold text-white flex items-center gap-3">
-                    🤗 HF Manager Pro
-                </h1>
-                <p class="text-gray-400 mt-2" id="userInfo">Memuat data pengguna...</p>
+                <h1 class="text-3xl font-black text-white flex items-center gap-2">🤗 HF <span class="hf-yellow">Manager Pro</span></h1>
+                <p class="text-gray-400 mt-1" id="userInfo">Mendapatkan data profil...</p>
             </div>
-            <div class="flex gap-2 w-full md:w-auto">
-                <button id="refreshBtn" onclick="fetchRepos()" class="flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm transition">
+            <div class="flex gap-3">
+                <button onclick="fetchRepos()" class="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition border border-gray-600">
                     <svg id="refreshIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                     Refresh
                 </button>
-                <button onclick="logoutPrompt()" class="bg-red-900 bg-opacity-20 hover:bg-opacity-40 text-red-400 border border-red-900 px-4 py-2 rounded-md text-sm transition">Logout</button>
+                <button onclick="logout()" class="bg-red-900/20 text-red-400 border border-red-900/50 px-4 py-2 rounded-lg text-sm hover:bg-red-900/40 transition">Logout</button>
             </div>
         </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <section class="glass p-6 rounded-xl shadow-lg border-t-4 border-t-yellow-500">
-                <h3 class="font-bold mb-4 text-yellow-400 flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path></svg>
-                    Model Repo Baru
-                </h3>
-                <div class="space-y-4">
-                    <input type="text" id="newRepoName" placeholder="Nama model..." class="w-full p-2.5 rounded bg-gray-900 border border-gray-700 text-sm focus:border-yellow-500 outline-none transition">
-                    <div class="flex items-center gap-2 bg-gray-800 p-2 rounded border border-gray-700">
-                        <input type="checkbox" id="isPrivate" class="w-4 h-4 accent-yellow-500">
-                        <label for="isPrivate" class="text-sm cursor-pointer select-none">Private Model Repo</label>
-                    </div>
-                    <button onclick="createRepo()" id="btnCreate" class="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-2.5 rounded-md transition shadow-[0_0_15px_rgba(234,179,8,0.2)]">Buat Repo</button>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+            <!-- Create Repo -->
+            <div class="glass p-6 rounded-2xl border-l-4 border-l-yellow-500">
+                <h3 class="font-bold text-white mb-4 flex items-center gap-2">➕ Buat Model Baru</h3>
+                <input type="text" id="newRepoName" placeholder="nama-model-anda" class="w-full p-3 rounded bg-gray-900 border border-gray-700 text-sm mb-3 focus:border-yellow-500 outline-none">
+                <div class="flex items-center gap-2 mb-4">
+                    <input type="checkbox" id="isPrivate" class="w-4 h-4 accent-yellow-500">
+                    <label for="isPrivate" class="text-xs text-gray-400">Private Repository</label>
                 </div>
-            </section>
+                <button onclick="createRepo()" id="btnCreate" class="w-full bg-hf-yellow hover:bg-yellow-600 text-black font-bold py-2.5 rounded-lg transition">Buat Repo</button>
+            </div>
 
-            <section class="glass p-6 rounded-xl lg:col-span-2 shadow-lg border-t-4 border-t-orange-500">
-                <h3 class="font-bold mb-4 text-orange-400 flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                    Batch Sync (ZIP to Hub API)
-                </h3>
+            <!-- Sync ZIP -->
+            <div class="glass p-6 rounded-2xl lg:col-span-2 border-l-4 border-l-orange-500">
+                <h3 class="font-bold text-white mb-4 flex items-center gap-2">📦 Batch Sync (ZIP)</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="space-y-4">
-                        <label class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Target Model Repo</label>
-                        <input type="text" id="targetRepo" placeholder="Pilih dari daftar di bawah..." class="w-full p-2.5 rounded bg-gray-900 border border-gray-700 text-sm focus:border-orange-500 outline-none transition" readonly>
-                        <label class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">File ZIP Sumber</label>
-                        <input type="file" id="zipFile" accept=".zip" class="w-full text-xs text-gray-400 file:bg-gray-800 file:text-white file:border border-gray-600 file:border-solid file:py-2 file:px-4 file:rounded file:mr-3 cursor-pointer hover:file:bg-gray-700 transition file:transition-all">
+                    <div>
+                        <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1">Target Model</label>
+                        <input type="text" id="targetRepo" readonly placeholder="Pilih dari daftar..." class="w-full p-3 rounded bg-gray-800 border border-gray-700 text-sm mb-3 text-yellow-500 font-mono">
+                        <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1">File ZIP</label>
+                        <input type="file" id="zipFile" accept=".zip" class="text-xs text-gray-400 w-full file:bg-gray-700 file:border-0 file:text-white file:px-3 file:py-2 file:rounded file:mr-3">
                     </div>
                     <div class="flex flex-col justify-end">
-                        <button onclick="handleBatchSync()" id="btnUpload" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-md shadow-[0_0_15px_rgba(249,115,22,0.2)] transition">
-                            Commit Batch ZIP
-                        </button>
-                        <p class="text-[10px] text-gray-500 mt-3 italic leading-tight">File akan diekstrak lokal lalu diunggah via 1x transaksi <strong>HF Commit API</strong> (Atomic Update).</p>
+                        <button onclick="handleBatchSync()" id="btnUpload" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-lg shadow-lg transition">Commit & Push ke Hub</button>
                     </div>
                 </div>
-            </section>
+            </div>
         </div>
 
-        <section class="mt-12">
-            <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-3">
-                <h3 class="text-xl font-bold text-white flex items-center gap-2">
-                    Daftar Model Repositori
-                </h3>
-                <span id="repoCount" class="bg-yellow-500 text-black font-bold text-xs px-2.5 py-0.5 rounded-full">0</span>
-            </div>
-            <div id="repoList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- Data will be loaded here -->
-            </div>
-        </section>
+        <!-- Repo List -->
+        <div class="mb-6 flex items-center justify-between">
+            <h2 class="text-xl font-bold flex items-center gap-3">
+                Daftar Repositori Model 
+                <span id="repoCount" class="bg-gray-800 text-yellow-500 px-3 py-1 rounded-full text-xs border border-gray-700">0</span>
+            </h2>
+        </div>
+        
+        <div id="repoList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Loader -->
+            <div class="col-span-full py-20 text-center text-gray-500">Memuat repositori...</div>
+        </div>
     </div>
 
-    <!-- Toast UI -->
-    <div id="toast" class="fixed bottom-4 right-4 p-4 rounded-lg hidden z-[110] text-white shadow-2xl font-bold transition-all duration-300 min-w-[250px] text-center border border-white/10"></div>
+    <div id="toast" class="fixed bottom-6 right-6 p-4 rounded-xl hidden z-[110] text-white shadow-2xl font-medium transition-all duration-300 border border-white/10"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>
-        eruda.init();
         let HF_TOKEN = localStorage.getItem('hf_token');
         let USERNAME = "";
 
+        // -- Inisialisasi --
         window.onload = () => {
             if (!HF_TOKEN) {
                 document.getElementById('authOverlay').classList.remove('hidden');
             } else {
-                validateAndInit();
+                validateToken();
             }
         };
 
-        function saveToken(e) {
-            if(e) e.preventDefault();
-            
+        function saveToken() {
             const val = document.getElementById('hfTokenInput').value.trim();
-            if (!val || !val.startsWith('hf_')) {
-                showToast("Token tidak valid. Harus diawali hf_", "error");
-                return;
-            }
-
+            if (!val.startsWith('hf_')) return alert("Token harus diawali dengan 'hf_'");
             localStorage.setItem('hf_token', val);
             HF_TOKEN = val;
-            
-            document.getElementById('authOverlay').classList.add('hidden');
-            validateAndInit();
+            location.reload();
         }
 
-        async function validateAndInit() {
+        async function validateToken() {
             try {
-                // Endpoint identitas Hugging Face
                 const data = await hfReq("whoami-v2");
-                USERNAME = data.name; 
-                
-                document.getElementById('userInfo').innerHTML = `User: <span class="text-yellow-400 font-bold">${USERNAME}</span> <span class="text-xs ml-2 bg-gray-800 px-2 py-1 rounded text-gray-400 border border-gray-700">${data.type}</span>`;
-                
-                const mainApp = document.getElementById('mainApp');
-                mainApp.classList.remove('opacity-0');
-                
+                USERNAME = data.name; // Mengambil handle unik username
+                document.getElementById('userInfo').innerHTML = `User: <b class="text-white">${USERNAME}</b> (${data.fullname || 'No Name'})`;
+                document.getElementById('mainApp').classList.remove('opacity-0');
                 fetchRepos();
-                showToast(`Login berhasil, Halo ${USERNAME}!`, "success");
-            } catch (err) {
-                console.error("Validation error:", err);
-                showToast("Token tidak valid/Expired.", "error");
+            } catch (e) {
                 localStorage.removeItem('hf_token');
-                document.getElementById('authOverlay').classList.remove('hidden');
+                location.reload();
             }
         }
 
-        // --- Core Fetch Wrapper Hugging Face API ---
+        // -- API Wrapper --
         async function hfReq(endpoint, method = "GET", body = null, isFormData = false) {
-            const headers = {
-                'Authorization': `Bearer ${HF_TOKEN}`
-            };
-            
-            // Jangan set Content-Type jika FormData, browser akan set dengan boundary otomatis
-            if (!isFormData && body) {
-                headers['Content-Type'] = 'application/json';
-            }
+            const headers = { 'Authorization': `Bearer ${HF_TOKEN}` };
+            if (!isFormData && body) headers['Content-Type'] = 'application/json';
 
             const options = { method, headers };
-            if (body) {
-                options.body = isFormData ? body : JSON.stringify(body);
-            }
-            
+            if (body) options.body = isFormData ? body : JSON.stringify(body);
+
             const res = await fetch(`https://huggingface.co/api/${endpoint}`, options);
-            
             if (res.status === 204) return true;
             
-            // Coba parsing JSON (Hugging Face kadang me-return text jika error 500)
-            let data = {};
-            try { data = await res.json(); } catch(e) {}
-            
-            if (!res.ok) {
-                throw new Error(data.error || data.message || `HTTP Error ${res.status}`);
-            }
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || data.message || "Request Error");
             return data;
         }
 
-        // --- UI Utilities ---
-        function showToast(msg, type = "info") {
-            const toast = document.getElementById('toast');
-            toast.innerText = msg;
-            toast.className = `fixed bottom-4 right-4 p-4 rounded-lg z-[110] text-white shadow-2xl font-bold transition-all border ${
-                type === 'success' ? 'bg-green-700 border-green-500' : 
-                type === 'error' ? 'bg-red-700 border-red-500' : 
-                'bg-gray-800 border-gray-600'
-            }`;
-            toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 4000);
-        }
-
-        function showCustomModal(title, message, options = []) {
-            const overlay = document.getElementById('modalOverlay');
-            document.getElementById('modalTitle').innerText = title;
-            document.getElementById('modalMessage').innerText = message;
-            const btnContainer = document.getElementById('modalButtons');
-            btnContainer.innerHTML = '';
-            
-            if (options.length === 0) options = [{ text: "Tutup", className: "bg-gray-700" }];
-            
-            options.forEach(opt => {
-                const btn = document.createElement('button');
-                btn.innerText = opt.text;
-                btn.className = `p-2.5 rounded text-white font-bold transition ${opt.className || "bg-gray-700 hover:bg-gray-600"}`;
-                btn.onclick = () => {
-                    overlay.classList.add('hidden');
-                    if (opt.callback) opt.callback();
-                };
-                btnContainer.appendChild(btn);
-            });
-            overlay.classList.remove('hidden');
-        }
-
-        function toggleLoading(id, isLoading) {
-            const btn = document.getElementById(id);
-            if (!btn) return;
-            if (isLoading) {
-                btn.disabled = true;
-                btn.classList.add('opacity-50', 'cursor-not-allowed', 'animate-pulse');
-                btn.dataset.origText = btn.innerText;
-                btn.innerText = "Processing on Hub...";
-            } else {
-                btn.disabled = false;
-                btn.classList.remove('opacity-50', 'cursor-not-allowed', 'animate-pulse');
-                btn.innerText = btn.dataset.origText || btn.innerText;
-            }
-        }
-
-        // --- Feature Logics ---
+        // -- CORE FIX: Fetch Repositories --
         async function fetchRepos() {
+            const listEl = document.getElementById('repoList');
             const icon = document.getElementById('refreshIcon');
             icon.classList.add('refresh-spin');
+
             try {
-                // Fetch hanya type "model" milik user saat ini
-                const repos = await hfReq(`models?author=${USERNAME}&sort=lastModified&direction=-1`);
+                // Mengambil model spesifik milik author (username)
+                // Filter: author=${USERNAME} memastikan hanya model kita yang muncul
+                const repos = await hfReq(`models?author=${USERNAME}&sort=lastModified&direction=-1&full=true`);
+                
                 document.getElementById('repoCount').innerText = repos.length;
                 
-                const container = document.getElementById('repoList');
-                if(repos.length === 0) {
-                    container.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500 bg-gray-900 rounded border border-dashed border-gray-700">Belum ada model repositori.</div>';
-                } else {
-                    container.innerHTML = repos.map(repo => {
-                        // Hugging Face mereturn format id: "username/reponame"
-                        const shortName = repo.id.split('/').pop();
-                        const dateStr = repo.lastModified ? new Date(repo.lastModified).toLocaleDateString() : 'Baru';
-                        
-                        return `
-                        <div class="bg-gray-900 p-5 rounded-xl flex flex-col justify-between border border-gray-800 hover:border-yellow-500 transition-all group shadow-md hover:shadow-[0_0_15px_rgba(234,179,8,0.1)]">
-                            <div class="mb-5">
-                                <div class="font-bold text-white truncate group-hover:text-yellow-400 transition-colors text-lg" title="${shortName}">${shortName}</div>
-                                <div class="flex items-center gap-2 mt-2">
-                                    <span class="text-[10px] text-gray-400 border border-gray-700 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                        ${repo.private ? '🔒 Private' : '🌐 Public'}
-                                    </span>
-                                    <span class="text-[10px] text-gray-500 italic">Up: ${dateStr}</span>
-                                </div>
-                            </div>
-                            <div class="flex gap-2">
-                                <button onclick="selectRepo('${shortName}')" class="flex-1 text-xs bg-gray-800 hover:bg-yellow-500 hover:text-black text-gray-300 py-2 rounded transition font-semibold border border-gray-700 hover:border-yellow-500">Pilih Target</button>
-                                <button onclick="deleteRepoConfirm('${shortName}')" class="px-3 text-xs bg-red-900 bg-opacity-20 hover:bg-opacity-100 py-2 rounded text-red-400 hover:text-white transition border border-red-900 border-opacity-30">
-                                    <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                </button>
-                            </div>
-                        </div>
-                    `}).join('');
+                if (repos.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="col-span-full bg-gray-900/50 border border-dashed border-gray-700 rounded-2xl p-12 text-center">
+                            <p class="text-gray-500">Tidak ada model ditemukan untuk user <b>${USERNAME}</b>.</p>
+                            <p class="text-xs text-gray-600 mt-2">Pastikan Anda sudah membuat model di Hugging Face.</p>
+                        </div>`;
+                    return;
                 }
+
+                listEl.innerHTML = repos.map(repo => {
+                    const shortName = repo.id.replace(`${USERNAME}/`, '');
+                    const isPrivate = repo.private;
+                    return `
+                    <div class="glass p-5 rounded-2xl border border-gray-800 hover:border-yellow-500 transition-all group">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="truncate pr-4">
+                                <h4 class="font-bold text-white truncate text-lg">${shortName}</h4>
+                                <span class="text-[10px] text-gray-500 font-mono">${repo.id}</span>
+                            </div>
+                            <span class="text-[10px] px-2 py-0.5 rounded border ${isPrivate ? 'border-red-900 text-red-400' : 'border-green-900 text-green-400'}">
+                                ${isPrivate ? 'PRIVATE' : 'PUBLIC'}
+                            </span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="selectRepo('${shortName}')" class="flex-1 bg-gray-800 hover:bg-yellow-500 hover:text-black py-2 rounded-lg text-xs font-bold transition">Pilih</button>
+                            <button onclick="deleteRepo('${shortName}')" class="px-3 bg-red-900/20 hover:bg-red-600 text-red-500 hover:text-white rounded-lg transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                        </div>
+                    </div>`;
+                }).join('');
+
             } catch (err) {
-                showToast("Gagal memuat repositori", "error");
+                showToast(err.message, "error");
+                listEl.innerHTML = `<div class="col-span-full text-center text-red-400">Gagal memuat data: ${err.message}</div>`;
             } finally {
-                setTimeout(() => icon.classList.remove('refresh-spin'), 600);
+                icon.classList.remove('refresh-spin');
             }
         }
 
+        // -- Actions --
         function selectRepo(name) {
             document.getElementById('targetRepo').value = name;
-            showToast(`Model Repo "${name}" diset sbg target Sync.`, "success");
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            showToast(`Target: ${name}`, "success");
         }
 
         async function createRepo() {
-            const nameInput = document.getElementById('newRepoName');
-            const name = nameInput.value.trim();
-            if (!name) return showToast("Nama repo wajib diisi", "error");
-            
-            toggleLoading('btnCreate', true);
+            const name = document.getElementById('newRepoName').value.trim();
+            if (!name) return;
+            const btn = document.getElementById('btnCreate');
+            btn.disabled = true;
             try {
-                // HF Create Repo Endpoint (type wajib diisi, default: model)
-                await hfReq("repos/create", "POST", { 
-                    name: name, 
-                    type: "model", 
-                    private: document.getElementById('isPrivate').checked 
-                });
-                showToast("Repositori Model berhasil dibuat!", "success");
-                nameInput.value = "";
+                await hfReq("repos/create", "POST", { name, type: "model", private: document.getElementById('isPrivate').checked });
+                showToast("Repo berhasil dibuat!", "success");
+                document.getElementById('newRepoName').value = "";
                 fetchRepos();
-            } catch (err) {
-                showCustomModal("Gagal Membuat Repo", err.message);
-            } finally {
-                toggleLoading('btnCreate', false);
-            }
-        }
-
-        function deleteRepoConfirm(name) {
-            const fullName = `${USERNAME}/${name}`;
-            showCustomModal("Hapus Repositori", `Apakah Anda yakin ingin menghapus model "${fullName}" secara permanen?`, [
-                { text: "Ya, Hapus Permanen", className: "bg-red-600 hover:bg-red-700", callback: async () => {
-                    try {
-                        // HF Delete Endpoint format standard
-                        await hfReq("repos/delete", "DELETE", {
-                            name: fullName,
-                            type: "model"
-                        });
-                        showToast("Model berhasil dihapus", "success");
-                        if(document.getElementById('targetRepo').value === name) {
-                            document.getElementById('targetRepo').value = "";
-                        }
-                        fetchRepos();
-                    } catch (err) { 
-                        showCustomModal("Gagal Menghapus", err.message);
-                    }
-                }},
-                { text: "Batal", className: "bg-gray-800 border border-gray-600" }
-            ]);
+            } catch (e) { showToast(e.message, "error"); }
+            finally { btn.disabled = false; }
         }
 
         async function handleBatchSync() {
-            const repoName = document.getElementById('targetRepo').value.trim();
+            const repoName = document.getElementById('targetRepo').value;
             const fileInput = document.getElementById('zipFile');
-            
-            if (!repoName || fileInput.files.length === 0) {
-                return showToast("Pilih repositori target dan file ZIP dahulu", "error");
-            }
+            if (!repoName || !fileInput.files[0]) return showToast("Pilih repo & file ZIP!", "error");
 
-            toggleLoading('btnUpload', true);
+            const btn = document.getElementById('btnUpload');
+            btn.innerText = "Processing ZIP...";
+            btn.disabled = true;
+
             try {
-                showToast("Mengekstrak file ZIP secara lokal...");
-                const zip = await new JSZip().loadAsync(fileInput.files[0]);
-                
+                const zip = await JSZip.loadAsync(fileInput.files[0]);
                 const formData = new FormData();
                 const operations = [];
 
-                let fileCount = 0;
-                
-                // Iterasi dan parsing file ZIP
                 for (let path in zip.files) {
                     if (!zip.files[path].dir) {
-                        const blob = await zip.files[path].async("blob");
-                        
-                        // Siapkan instruksi operasi Commit API HF
-                        operations.push({
-                            operation: "add",
-                            path: path // Path struktur folder di dalam repo
-                        });
-                        
-                        // Attach file aktual ke FormData. Key name HARUS match dengan path yang didaftarkan
-                        formData.append(path, blob, path.split('/').pop());
-                        fileCount++;
+                        const content = await zip.files[path].async("blob");
+                        operations.push({ operation: "add", path: path });
+                        formData.append(path, content, path.split('/').pop());
                     }
                 }
 
-                if (fileCount === 0) throw new Error("File ZIP kosong.");
-
-                // Attach Commit Operations JSON string
                 formData.append("operations", JSON.stringify(operations));
-                formData.append("commit_message", `Sync via HF Manager Pro (Batch ZIP) - ${new Date().toLocaleString()}`);
+                formData.append("commit_message", "Web Batch Sync: " + new Date().toLocaleString());
 
-                showToast(`Menyinkronkan ${fileCount} file ke Hub API...`);
-                
-                // Endpoint Hugging Face Hub Commit API 
-                // Otomatis membuat branch 'main' jika blm ada, dan menghandle atomic push (semua upload sekaligus)
+                showToast("Uploading to Hugging Face...", "info");
                 await hfReq(`models/${USERNAME}/${repoName}/commit/main`, "POST", formData, true);
-
-                showToast("Batch Sync berhasil dikomit ke Hub!", "success");
+                
+                showToast("Sync Berhasil!", "success");
                 fileInput.value = "";
-                fetchRepos(); // Update list Last Modified
-            } catch (err) {
-                console.error(err);
-                showCustomModal("Gagal Sinkronisasi", err.message);
+            } catch (e) {
+                showToast(e.message, "error");
             } finally {
-                toggleLoading('btnUpload', false);
+                btn.innerText = "Commit & Push ke Hub";
+                btn.disabled = false;
             }
         }
 
-        function logoutPrompt() {
-            showCustomModal("Konfirmasi Logout", "Sesi akses token Hugging Face akan dihapus dari browser.", [
-                { text: "Ya, Logout", className: "bg-red-600 text-white hover:bg-red-700", callback: () => {
-                    localStorage.removeItem('hf_token');
-                    location.reload();
-                }},
-                { text: "Batal", className: "bg-gray-800" }
-            ]);
+        async function deleteRepo(name) {
+            if (!confirm(`Hapus repo ${name} selamanya?`)) return;
+            try {
+                await hfReq("repos/delete", "DELETE", { name: `${USERNAME}/${name}`, type: "model" });
+                showToast("Berhasil dihapus", "success");
+                fetchRepos();
+            } catch (e) { showToast(e.message, "error"); }
         }
+
+        function showToast(msg, type = "info") {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.className = `fixed bottom-6 right-6 p-4 rounded-xl z-[110] text-white shadow-2xl transition-all border ${type === 'success' ? 'bg-green-600 border-green-400' : type === 'error' ? 'bg-red-600 border-red-400' : 'bg-blue-600 border-blue-400'}`;
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 3000);
+        }
+
+        function logout() { localStorage.removeItem('hf_token'); location.reload(); }
     </script>
 </body>
 </html>
