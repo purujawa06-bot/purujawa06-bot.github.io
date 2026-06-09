@@ -1,82 +1,105 @@
 /**
- * Player.js - Menangani penskalaan video untuk WebRTC Mirroring menggunakan Native Video Element
+ * Player.js - Optimized for Buffer Management and Zoom
  */
 
 const Player = {
-    scaleMode: 'contain', // contain, cover, atau fill
     currentZoom: 1,
     video: null,
+    pc: null, // Menyimpan referensi RTCPeerConnection
 
-    init(videoElement) {
+    init(videoElement, peerConnection = null) {
         this.video = videoElement;
-        this.applyStyle();
+        if (peerConnection) this.pc = peerConnection;
+        this.reset();
+        // Force rendering kickstart
+        if (this.video) {
+            this.video.style.opacity = '0.99';
+            setTimeout(() => { this.video.style.opacity = '1'; }, 50);
+        }
     },
 
-    toggleScaleMode() {
-        if (this.scaleMode === 'contain') {
-            this.scaleMode = 'cover'; 
-        } else if (this.scaleMode === 'cover') {
-            this.scaleMode = 'fill';  
-        } else {
-            this.scaleMode = 'contain';
+    setPC(peerConnection) {
+        this.pc = peerConnection;
+    },
+
+    reset() {
+        this.currentZoom = 1;
+        if (this.video) {
+            this.video.style.transform = 'scale(1)';
+            this.video.style.objectFit = 'contain';
         }
-        this.applyStyle();
-        return this.scaleMode;
     },
 
     zoomIn() {
-        this.currentZoom = Math.min(this.currentZoom + 0.1, 3.0);
+        this.currentZoom = Math.min(this.currentZoom + 0.2, 4.0);
         this.applyStyle();
         return this.currentZoom;
     },
 
     zoomOut() {
-        this.currentZoom = Math.max(this.currentZoom - 0.1, 0.5);
+        this.currentZoom = Math.max(this.currentZoom - 0.2, 0.5);
         this.applyStyle();
         return this.currentZoom;
     },
 
     applyStyle() {
         if (!this.video) return;
-
-        // Terapkan transformasi zoom
         this.video.style.transform = `scale(${this.currentZoom})`;
         this.video.style.transformOrigin = 'center center';
-        this.video.style.transition = 'all 0.2s ease-out';
-        
-        // Atur object-fit
-        if (this.scaleMode === 'contain') {
-            this.video.style.objectFit = 'contain';
-        } else if (this.scaleMode === 'cover') {
-            this.video.style.objectFit = 'cover';
-        } else if (this.scaleMode === 'fill') {
-            this.video.style.objectFit = 'fill';
-        }
+        this.video.style.transition = 'transform 0.15s ease-out';
+    },
+
+    toggleMute() {
+        if (!this.video) return true;
+        this.video.muted = !this.video.muted;
+        // Some mobile browsers need explicit volume set after unmuting
+        if (!this.video.muted) this.video.volume = 1.0;
+        return this.video.muted;
     },
 
     /**
-     * Mengatur playoutDelayHint (Chromium based) untuk mengontrol buffer latency
-     * @param {number} min - Minimum delay dalam milidetik
-     * @param {number} max - Maximum delay dalam milidetik
+     * Mengatur playoutDelayHint & jitterBufferTarget pada RTCRtpReceiver.
+     * Memastikan audio dan video mendapatkan nilai delay yang identik untuk mencegah drift/desync.
      */
-    setPlayoutDelay(min, max) {
-        if (!this.video || !this.video.srcObject) return;
+    setPlayoutDelay(minMs) {
+        if (!this.pc) {
+            console.warn("[Buffer] PeerConnection belum siap.");
+            return;
+        }
         
-        const stream = this.video.srcObject;
-        const minSec = min / 1000;
-        const maxSec = max / 1000;
+        const minSec = minMs / 1000;
+        console.log(`[Buffer] Mencoba menerapkan delay ${minMs}ms ke semua track...`);
 
-        stream.getTracks().forEach(track => {
-            if ('playoutDelayHint' in track) {
-                track.playoutDelayHint = minSec;
-                console.log(`Setting buffer for ${track.kind}: ${min}ms`);
-            } else {
-                console.warn("playoutDelayHint tidak didukung di browser ini.");
+        try {
+            const receivers = this.pc.getReceivers();
+            if (receivers.length === 0) {
+                console.warn("[Buffer] Tidak ada receiver ditemukan.");
+                return;
             }
-        });
 
-        // Pada beberapa versi browser, kita juga bisa mencoba mengatur receiver constraints
-        // Namun playoutDelayHint adalah standar terbaru untuk WebRTC buffer control.
+            receivers.forEach(receiver => {
+                // 1. Standar Baru: jitterBufferTarget (Chromium 122+, satuan: milidetik)
+                if ('jitterBufferTarget' in receiver) {
+                    try {
+                        receiver.jitterBufferTarget = minMs;
+                    } catch(e) { console.error("Gagal set jitterBufferTarget", e); }
+                }
+                
+                // 2. Legacy/Experimental: playoutDelayHint (Chromium 85+, satuan: detik)
+                if ('playoutDelayHint' in receiver) {
+                    receiver.playoutDelayHint = minSec;
+                }
+                
+                // 3. Fallback langsung ke track (beberapa versi browser tertentu)
+                if (receiver.track && 'playoutDelayHint' in receiver.track) {
+                    receiver.track.playoutDelayHint = minSec;
+                }
+
+                console.log(`[Buffer] Applied to ${receiver.track?.kind || 'unknown'} track: ${minMs}ms`);
+            });
+        } catch (e) {
+            console.error("[Buffer Error]", e);
+        }
     }
 };
 
