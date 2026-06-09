@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SocketKu - Hubungkan Perangkat</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Menggunakan pustaka QRCode.js dan PeerJS dari CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
@@ -16,115 +15,246 @@
             <div id="status-indicator" class="status offline">Menunggu...</div>
         </nav>
 
+        <!-- ===== CONNECTION SCREEN ===== -->
         <main id="connection-screen">
             <div class="card main-card">
                 <h1>Hubungkan Perangkat</h1>
-                <p>Scan QR Code di bawah ini atau buka link di HP Anda.</p>
-                
-                <div class="qr-container">
-                    <div id="qrcode"></div>
-                </div>
-
+                <p>Scan QR Code atau buka link di perangkat lain.</p>
+                <div class="qr-container"><div id="qrcode"></div></div>
                 <div class="info-box">
                     <p id="peer-id-display">Menginisialisasi ID...</p>
                 </div>
-                
-                <p style="font-size: 0.8rem; margin-top: -20px;">ID Anda: <span id="my-id">...</span></p>
+                <p style="font-size:0.8rem;margin-top:-20px;">ID Anda: <span id="my-id">...</span></p>
             </div>
         </main>
 
+        <!-- ===== DASHBOARD SCREEN ===== -->
         <main id="dashboard-screen" class="hidden">
             <div class="card">
-                <h1>Selamat Datang di Dashboard</h1>
-                <p>Perangkat Anda berhasil terhubung!</p>
+                <div class="dashboard-header">
+                    <div>
+                        <h1>Dashboard</h1>
+                        <p style="margin:0;">Perangkat terhubung ✅</p>
+                    </div>
+                    <div class="device-badge">
+                        <span class="badge-icon">📡</span>
+                        <span id="remote-id" class="badge-id">None</span>
+                    </div>
+                </div>
+
                 <div class="stats-grid">
                     <div class="stat-item">
                         <span class="label">Status</span>
                         <span class="value green">Aktif</span>
                     </div>
                     <div class="stat-item">
-                        <span class="label">ID Perangkat Terhubung</span>
-                        <span class="value" id="remote-id">None</span>
+                        <span class="label">Sinyal</span>
+                        <span class="value" id="signal-strength">P2P Langsung</span>
                     </div>
                 </div>
 
+                <div class="section-title">🛠️ Pilih Fitur</div>
                 <div class="tools-grid">
-                    <div id="btn-share-file" class="tool-card">
+                    <!-- Share File -->
+                    <div id="btn-share-file" class="tool-card" onclick="openRoleSelection('file')">
                         <div class="tool-icon">📁</div>
                         <h3>Share File</h3>
                         <p>Kirim dokumen & media</p>
-                        <input type="file" id="file-input" class="hidden">
+                        <div class="tool-badge">ShareIt Style</div>
                     </div>
-                    <div id="btn-mirroring" class="tool-card">
+                    <!-- Screen Mirror -->
+                    <div id="btn-mirroring" class="tool-card" onclick="openRoleSelection('mirror')">
                         <div class="tool-icon">📺</div>
                         <h3>Screen Mirror</h3>
-                        <p>Tampilkan layar HP ke PC</p>
+                        <p>Bagikan / lihat layar</p>
+                        <div class="tool-badge">Live Stream</div>
                     </div>
+                    <!-- Coming Soon -->
                     <div class="tool-card disabled">
                         <div class="tool-icon">⏳</div>
                         <h3>Coming Soon</h3>
                         <p>Fitur baru lainnya</p>
                     </div>
                 </div>
-                
+
                 <div id="conflict-warn" class="warning-box hidden">
                     ⚠️ <span id="conflict-msg">Menunggu kesiapan perangkat lawan...</span>
                 </div>
 
-                <button id="sim-disconnect" class="btn-outline">Putuskan Koneksi</button>
+                <button id="sim-disconnect" class="btn-outline">🔌 Putuskan Koneksi</button>
             </div>
         </main>
 
-        <!-- Role Selection Overlay -->
+        <!-- ===== ROLE SELECTION OVERLAY ===== -->
         <div id="role-overlay" class="modal hidden">
             <div class="modal-content role-selection">
-                <h2 id="role-title">Pilih Peran Anda</h2>
-                <p id="role-desc">Tentukan apakah Anda ingin mengirim atau menerima.</p>
+                <div class="modal-header">
+                    <h2 id="role-title">Pilih Peran</h2>
+                    <button id="close-role" class="btn-close">&times;</button>
+                </div>
+                <p id="role-desc" style="margin-bottom:10px;">Tentukan peran Anda dalam sesi ini.</p>
                 <div class="role-options">
-                    <button id="role-sender" class="role-btn">
-                        <span class="icon">📤</span>
-                        <span>PENGIRIM</span>
+                    <button id="role-sender" class="role-btn sender-btn">
+                        <span class="role-icon">📤</span>
+                        <span class="role-name">PENGIRIM</span>
+                        <span class="role-hint" id="sender-hint">Kirim / Bagikan</span>
                     </button>
-                    <button id="role-receiver" class="role-btn">
-                        <span class="icon">📥</span>
-                        <span>PENERIMA</span>
+                    <button id="role-receiver" class="role-btn receiver-btn">
+                        <span class="role-icon">📥</span>
+                        <span class="role-name">PENERIMA</span>
+                        <span class="role-hint" id="receiver-hint">Terima / Tampilkan</span>
                     </button>
                 </div>
-                <button id="close-role" class="btn-text">Batal</button>
             </div>
         </div>
 
-        <!-- Mirroring Overlay -->
-        <div id="mirror-overlay" class="modal hidden">
-            <div class="modal-content mirror-container">
+        <!-- ===== SHARE FILE OVERLAY ===== -->
+        <div id="sharefile-overlay" class="modal hidden">
+            <div class="modal-content sharefile-container">
                 <div class="modal-header">
-                    <h2 id="mirror-status-text">Screen Mirroring</h2>
+                    <h2 id="sf-title">Share File</h2>
                     <div class="header-actions">
-                        <button id="btn-fullscreen" class="btn-icon">⛶</button>
+                        <span id="sf-role-badge" class="role-indicator">📤 Pengirim</span>
+                        <button id="close-sharefile" class="btn-close">&times;</button>
+                    </div>
+                </div>
+
+                <!-- SENDER UI -->
+                <div id="sf-sender-ui" class="hidden">
+                    <div class="shareit-radar">
+                        <div class="radar-ring r1"></div>
+                        <div class="radar-ring r2"></div>
+                        <div class="radar-ring r3"></div>
+                        <div class="radar-center" id="sf-drop-zone" onclick="document.getElementById('file-input').click()">
+                            <div class="radar-icon">📁</div>
+                            <p>Ketuk atau<br>Drop File</p>
+                        </div>
+                    </div>
+                    <input type="file" id="file-input" class="hidden" multiple>
+
+                    <!-- File Queue -->
+                    <div id="file-queue" class="file-queue hidden">
+                        <div class="queue-header">
+                            <span>File Dipilih</span>
+                            <button id="btn-send-files" class="btn-send">Kirim Semua 🚀</button>
+                        </div>
+                        <div id="file-list" class="file-list"></div>
+                    </div>
+                </div>
+
+                <!-- RECEIVER UI -->
+                <div id="sf-receiver-ui" class="hidden">
+                    <div class="receiver-waiting">
+                        <div class="pulse-icon">📡</div>
+                        <h3>Siap Menerima</h3>
+                        <p>File yang dikirim perangkat lain akan otomatis diunduh.</p>
+                        <div id="received-files-list" class="received-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== SCREEN MIRRORING OVERLAY ===== -->
+        <div id="mirror-overlay" class="modal hidden">
+            <div class="modal-content mirror-container" id="mirror-modal-content">
+                <div class="modal-header">
+                    <div class="mirror-title-group">
+                        <h2 id="mirror-status-text">Screen Mirroring</h2>
+                        <span id="mirror-role-badge" class="role-indicator">📺 Penerima</span>
+                    </div>
+                    <div class="header-actions">
+                        <!-- PC Options Toggle (only on receiver) -->
+                        <button id="btn-pc-options" class="btn-icon-text hidden" title="Opsi PC">⚙️ Opsi PC</button>
+                        <button id="btn-fullscreen" class="btn-icon" title="Fullscreen">⛶</button>
                         <button id="close-mirror" class="btn-close">&times;</button>
                     </div>
                 </div>
+
+                <!-- Mirror View Area -->
                 <div class="mirror-view" id="video-wrapper">
                     <video id="remote-video" autoplay playsinline></video>
-                    <div id="mirror-placeholder" class="phone-frame">
-                        <div class="phone-content">
-                            <div class="pulse-ring"></div>
-                            <p id="mirror-wait-msg">Menunggu Stream Video...</p>
-                        </div>
+                    <video id="local-preview" autoplay playsinline muted class="hidden"></video>
+                    <div id="mirror-placeholder" class="mirror-placeholder">
+                        <div class="pulse-ring"></div>
+                        <p id="mirror-wait-msg">Menunggu stream...</p>
                     </div>
                 </div>
+
+                <!-- Sender Controls -->
+                <div id="sender-controls" class="hidden">
+                    <div class="sender-actions">
+                        <button id="btn-stop-capture" class="btn-danger-sm">⏹ Stop Share</button>
+                        <span id="share-status-label" class="share-label">Belum berbagi</span>
+                    </div>
+                </div>
+
+                <!-- PC Options Panel (Receiver Side) -->
+                <div id="pc-options-panel" class="pc-options hidden">
+                    <div class="pc-options-title">🖥️ Opsi PC</div>
+                    <div class="pc-options-grid">
+
+                        <!-- Mirroring Recorder -->
+                        <div class="pc-option-card" id="option-recorder">
+                            <div class="pc-opt-icon">🎥</div>
+                            <div class="pc-opt-info">
+                                <strong>Mirroring Recorder</strong>
+                                <small>Rekam stream yang diterima</small>
+                            </div>
+                            <div class="pc-opt-controls">
+                                <button id="btn-start-record" class="btn-opt-action">● REC</button>
+                                <button id="btn-stop-record" class="btn-opt-action danger hidden">■ Stop</button>
+                                <span id="rec-timer" class="rec-timer hidden">00:00</span>
+                            </div>
+                        </div>
+
+                        <!-- Input Device -->
+                        <div class="pc-option-card" id="option-input">
+                            <div class="pc-opt-icon">🎙️</div>
+                            <div class="pc-opt-info">
+                                <strong>Mirroring Input Device</strong>
+                                <small>Pilih mikrofon / kamera</small>
+                            </div>
+                            <div class="pc-opt-controls">
+                                <select id="select-audio-input" class="device-select">
+                                    <option value="">-- Mikrofon --</option>
+                                </select>
+                                <select id="select-video-input" class="device-select">
+                                    <option value="">-- Kamera --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Output Device -->
+                        <div class="pc-option-card" id="option-output">
+                            <div class="pc-opt-icon">🔊</div>
+                            <div class="pc-opt-info">
+                                <strong>Mirroring Output Device</strong>
+                                <small>Pilih speaker keluaran</small>
+                            </div>
+                            <div class="pc-opt-controls">
+                                <select id="select-audio-output" class="device-select">
+                                    <option value="">-- Speaker Default --</option>
+                                </select>
+                                <button id="btn-apply-output" class="btn-opt-action">Terapkan</button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
             </div>
         </div>
 
-        <!-- Transfer Notification -->
+        <!-- Transfer Toast -->
         <div id="transfer-toast" class="toast hidden">
-            <div class="toast-icon">🚀</div>
+            <div class="toast-icon" id="toast-icon">🚀</div>
             <div class="toast-body">
                 <p id="transfer-msg">Mengirim file...</p>
-                <div class="progress-bar"><div class="progress-fill"></div></div>
+                <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
             </div>
         </div>
     </div>
+
     <script src="script.js"></script>
 </body>
 </html>
