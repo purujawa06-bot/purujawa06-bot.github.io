@@ -427,12 +427,13 @@
                     return await navigator.mediaDevices.getDisplayMedia({
                         video: { 
                             cursor: "always",
-                            frameRate: { ideal: 60 }
+                            frameRate: { max: 30 } // Dibatasi ke 30fps agar lebih stabil & lancar
                         },
                         audio: {
                             echoCancellation: false,
                             noiseSuppression: false,
-                            autoGainControl: false
+                            autoGainControl: false,
+                            suppressLocalAudioPlayback: false
                         }
                     });
                 } catch (err) {
@@ -442,8 +443,9 @@
             },
             async getSystemAudioStream() {
                 try {
+                    // Catatan: User HARUS mencentang "Share System Audio" di dialog browser
                     const stream = await navigator.mediaDevices.getDisplayMedia({
-                        video: { width: 1, height: 1 }, // Tiny video track to keep stream alive
+                        video: { width: 1, height: 1, frameRate: 1 }, 
                         audio: {
                             echoCancellation: false,
                             noiseSuppression: false,
@@ -451,11 +453,6 @@
                             suppressLocalAudioPlayback: false
                         }
                     });
-                    
-                    if (stream.getAudioTracks().length === 0) {
-                        this.addToast('Peringatan: Tidak ada audio sistem yang terpilih!');
-                    }
-                    
                     return stream;
                 } catch (err) {
                     console.error("Error sharing system audio:", err);
@@ -570,7 +567,7 @@
 
                 async startMirroring(type) {
                     if (this.connections.length === 0) {
-                        this.addToast('Tidak ada teman yang terhubung!');
+                        this.addToast('Harap hubungkan teman terlebih dahulu!');
                         return;
                     }
 
@@ -579,47 +576,61 @@
                     else this.localStream = await MirroringHandler.getAudioStream();
 
                     if (this.localStream) {
+                        // Pastikan audio track terdeteksi jika sharing system audio
+                        if (type === 'systemAudio' && this.localStream.getAudioTracks().length === 0) {
+                            this.addToast('Gagal: Pastikan centang "Berbagi Audio" saat memilih layar!');
+                            this.stopMirroring();
+                            return;
+                        }
+
                         this.mirroringActive = true;
                         this.connections.forEach(conn => {
+                            // Kirim stream ke semua peer yang terhubung
                             this.peer.call(conn.peer, this.localStream);
                         });
                         
+                        // SISI PENGIRIM: Tidak perlu memutar video sendiri untuk hemat CPU
                         const video = document.getElementById('mirror-video');
-                        if (video && type !== 'audio') {
-                            video.srcObject = this.localStream;
-                            video.muted = true; // Mute local preview to prevent echo/feedback
-                            this.monitorLatency();
-                        }
+                        if (video) video.srcObject = null; 
                         
                         this.localStream.getTracks().forEach(track => {
                             track.onended = () => this.stopMirroring();
                         });
-                        this.addToast(`Mirroring ${type} dimulai!`);
+                        this.addToast(`Streaming ${type} aktif (Mengirim...)`);
                     }
                 },
 
                 monitorLatency() {
+                    // Hanya dijalankan oleh PENERIMA
                     if (this.latencyInterval) clearInterval(this.latencyInterval);
                     this.latencyInterval = setInterval(() => {
                         const video = document.getElementById('mirror-video');
                         const tag = document.getElementById('latency-tag');
+                        
+                        // Jika pengirim (tidak ada srcObject tapi streaming aktif), tampilkan status "Broadcasting"
+                        if (this.localStream) {
+                            if (tag) tag.innerText = "Broadcasting...";
+                            return;
+                        }
+
                         if (!video || video.paused || video.ended || !this.mirroringActive) return;
 
                         if (video.buffered.length > 0) {
                             const bufferedEnd = video.buffered.end(video.buffered.length - 1);
                             const latency = bufferedEnd - video.currentTime;
                             
-                            if (tag) tag.innerText = (latency * 1000).toFixed(0) + 'ms';
+                            if (tag) tag.innerText = (latency * 1000).toFixed(0) + 'ms delay';
 
-                            if (latency > 0.1) { // 100ms
-                                video.playbackRate = 1.1; // Percepat 1.1x untuk mengejar
+                            // Jika delay > 200ms, percepat video untuk mengejar real-time
+                            if (latency > 0.2) { 
+                                video.playbackRate = 1.05;
                                 if (tag) tag.classList.add('text-yellow-400');
                             } else {
                                 video.playbackRate = 1.0;
                                 if (tag) tag.classList.remove('text-yellow-400');
                             }
                         }
-                    }, 500);
+                    }, 1000);
                 },
 
                 stopMirroring() {
@@ -666,24 +677,29 @@
                         this.addToast('Seseorang bergabung!');
                     });
                     this.peer.on('call', (call) => {
-                        this.addToast('Menerima aliran media...');
+                        this.addToast('Menerima kiriman media...');
                         call.answer(); 
                         call.on('stream', (remoteStream) => {
                             this.mirroringActive = true;
                             this.currentTab = 'mirroring';
-                            setTimeout(() => {
+                            
+                            this.$nextTick(() => {
                                 const video = document.getElementById('mirror-video');
                                 if (video) {
                                     video.srcObject = remoteStream;
-                                    video.muted = false; // Ensure receiver can hear audio
-                                    video.play().catch(e => {
-                                        console.error("Playback error:", e);
-                                        // Auto-play might be blocked, show a message or button
-                                        this.addToast('Klik area video untuk mengaktifkan suara');
-                                    });
+                                    video.muted = false; // Buka suara untuk penerima
+                                    video.volume = 1.0;
+                                    
+                                    const playPromise = video.play();
+                                    if (playPromise !== undefined) {
+                                        playPromise.catch(error => {
+                                            console.log("Autoplay dicegah browser, perlu interaksi user.");
+                                            this.addToast('Klik layar video untuk mengaktifkan suara');
+                                        });
+                                    }
                                     this.monitorLatency();
                                 }
-                            }, 500);
+                            });
                         });
                     });
                     this.peer.on('disconnected', () => {
