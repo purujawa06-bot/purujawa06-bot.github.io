@@ -76,65 +76,35 @@ const Player = {
 
     /**
      * Mengatur playoutDelayHint & jitterBufferTarget pada RTCRtpReceiver.
-     * Memastikan audio dan video mendapatkan nilai delay yang identik untuk mencegah drift/desync.
+     * Memisahkan target delay audio dan video untuk sinkronisasi yang lebih baik.
      */
     setPlayoutDelay(minMs) {
-        if (!this.pc) {
-            console.warn("[Buffer] PeerConnection belum siap.");
-            return;
-        }
-        
-        // Memaksa browser untuk memprioritaskan konsistensi frame
-        const minSec = minMs / 1000;
-        console.log(`[Buffer] Optimasi sinkronisasi: ${minMs}ms`);
+        if (!this.pc) return;
+        const receivers = this.pc.getReceivers();
+        if (receivers.length === 0) return;
 
-        try {
-            const receivers = this.pc.getReceivers();
-            if (receivers.length === 0) return;
+        receivers.forEach(receiver => {
+            if (!receiver.track) return;
+            const kind = receiver.track.kind;
 
-            receivers.forEach(receiver => {
-                // Gunakan jitterBufferTarget untuk mencegah audio pecah/crackling
+            // Audio: buffer ditingkatkan sedikit agar lebih stabil di jaringan fluktuatif
+            const targetMs  = kind === 'audio' ? Math.min(minMs, 300) : minMs;
+            const targetSec = targetMs / 1000;
+
+            try {
+                // 1. jitterBufferTarget (Chromium 122+)
                 if ('jitterBufferTarget' in receiver) {
-                    receiver.jitterBufferTarget = minMs;
+                    receiver.jitterBufferTarget = targetMs;
                 }
-                
+                // 2. playoutDelayHint (Chromium 85+)
                 if ('playoutDelayHint' in receiver) {
-                    receiver.playoutDelayHint = minSec;
+                    receiver.playoutDelayHint = targetSec;
                 }
-
-                // Pengaturan tambahan untuk memastikan video tidak stuttering
-                if (receiver.track && receiver.track.kind === 'video') {
-                    receiver.playoutDelayHint = Math.max(minSec, 0.05); // Minimal 50ms untuk video agar smooth
-                }
-            });
-            if (receivers.length === 0) {
-                console.warn("[Buffer] Tidak ada receiver ditemukan.");
-                return;
+                console.log(`[Buffer] ${kind}: ${targetMs}ms`);
+            } catch(e) {
+                console.error(`[Buffer] Gagal set ${kind}:`, e);
             }
-
-            receivers.forEach(receiver => {
-                // 1. Standar Baru: jitterBufferTarget (Chromium 122+, satuan: milidetik)
-                if ('jitterBufferTarget' in receiver) {
-                    try {
-                        receiver.jitterBufferTarget = minMs;
-                    } catch(e) { console.error("Gagal set jitterBufferTarget", e); }
-                }
-                
-                // 2. Legacy/Experimental: playoutDelayHint (Chromium 85+, satuan: detik)
-                if ('playoutDelayHint' in receiver) {
-                    receiver.playoutDelayHint = minSec;
-                }
-                
-                // 3. Fallback langsung ke track (beberapa versi browser tertentu)
-                if (receiver.track && 'playoutDelayHint' in receiver.track) {
-                    receiver.track.playoutDelayHint = minSec;
-                }
-
-                console.log(`[Buffer] Applied to ${receiver.track?.kind || 'unknown'} track: ${minMs}ms`);
-            });
-        } catch (e) {
-            console.error("[Buffer Error]", e);
-        }
+        });
     }
 };
 

@@ -152,8 +152,8 @@
                     <span id="buffer-val-display" class="text-[10px] text-emerald-400 font-mono">0ms</span>
                 </div>
                 <div class="grid grid-cols-3 gap-1">
-                    <button onclick="updateBuffer(0)" class="buffer-btn bg-emerald-600 text-[10px] py-1 rounded font-bold">REALTIME</button>
-                    <button onclick="updateBuffer(1000)" class="buffer-btn bg-gray-700 text-[10px] py-1 rounded font-bold">STABIL</button>
+                    <button onclick="updateBuffer(0)" class="buffer-btn bg-gray-700 text-[10px] py-1 rounded font-bold">REALTIME</button>
+                    <button onclick="updateBuffer(500)" class="buffer-btn bg-emerald-600 text-[10px] py-1 rounded font-bold">STABIL</button>
                     <button onclick="updateBuffer(2000)" class="buffer-btn bg-gray-700 text-[10px] py-1 rounded font-bold">EXTRA</button>
                 </div>
             </div>
@@ -273,7 +273,15 @@
         // --- PC (SENDER) ---
         function setupPC() {
             peerId = 'mc-' + Math.random().toString(36).substr(2, 6);
-            peer = new Peer(peerId);
+            peer = new Peer(peerId, {
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
+                    ]
+                }
+            });
 
             peer.on('open', (id) => {
                 document.getElementById('qrcode').innerHTML = '';
@@ -295,7 +303,8 @@
                 // Jika screen share sudah aktif sebelum HP konek, langsung kirim streamnya!
                 if (activeScreenStream) {
                     console.log("Otomatis mengirim stream ke receiver baru...");
-                    peer.call(conn.peer, activeScreenStream);
+                    const call = peer.call(conn.peer, activeScreenStream);
+                    optimizeCall(call);
                 }
                 
                 connection.on('close', () => {
@@ -321,8 +330,19 @@
             } else {
                 try {
                     const constraints = {
-                        video: { cursor: "always", frameRate: { ideal: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-                        audio: { echoCancellation: false, sampleRate: 48000 }
+                        video: { 
+                            cursor: "always", 
+                            frameRate: { ideal: 60, min: 15 }, 
+                            width: { ideal: 1920 }, 
+                            height: { ideal: 1080 } 
+                        },
+                        audio: { 
+                            echoCancellation: false, 
+                            noiseSuppression: false,
+                            autoGainControl: false,
+                            sampleRate: 48000,
+                            channelCount: 2
+                        }
                     };
                     const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
                     
@@ -375,22 +395,75 @@
         }
 
         function optimizeCall(call) {
+            if (!call) return;
             const pc = call.peerConnection;
+            let bitrateInterval = null;
+
+            try {
+                pc.getTransceivers().forEach(transceiver => {
+                    if (transceiver.sender?.track?.kind === 'video') {
+                        const codecs = RTCRtpSender.getCapabilities('video').codecs;
+                        const preferred = [
+                            ...codecs.filter(c => c.mimeType === 'video/VP9'),
+                            ...codecs.filter(c => c.mimeType === 'video/H264'),
+                            ...codecs.filter(c => c.mimeType === 'video/VP8'),
+                        ];
+                        if (preferred.length) transceiver.setCodecPreferences(preferred);
+                    }
+                });
+            } catch(e) { console.warn('Codec preference not supported:', e); }
+
             pc.onconnectionstatechange = () => {
+                console.log("Connection State:", pc.connectionState);
+                
+                if (pc.connectionState === 'failed') {
+                    pc.restartIce();
+                }
+
                 if (pc.connectionState === 'connected') {
-                    const senders = pc.getSenders();
-                    senders.forEach(sender => {
-                        if (sender.track && sender.track.kind === 'video') {
-                            const params = sender.getParameters();
-                            if (!params.encodings) params.encodings = [{}];
-                            // Set bitrate tinggi (5-10Mbps) untuk mencegah kualitas renyak
-                            params.encodings[0].maxBitrate = 10000000; 
-                            params.degradationPreference = 'maintain-resolution';
-                            sender.setParameters(params).catch(console.error);
+                    pc.getSenders().forEach(sender => {
+                        if (!sender.track) return;
+                        const params = sender.getParameters();
+                        if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+
+                        if (sender.track.kind === 'video') {
+                            params.encodings[0].maxBitrate = 8000000;
+                            params.encodings[0].networkPriority = 'high';
+                            params.encodings[0].degradationPreference = 'maintain-framerate';
+                        } else if (sender.track.kind === 'audio') {
+                            params.encodings[0].maxBitrate = 256000;
                         }
+                        sender.setParameters(params).catch(console.error);
                     });
+
+                    // Adaptive Bitrate Logic
+                    if (bitrateInterval) clearInterval(bitrateInterval);
+                    bitrateInterval = setInterval(async () => {
+                        const stats = await pc.getStats();
+                        stats.forEach(report => {
+                            if (report.type === 'outbound-rtp' && report.kind === 'video') {
+                                const lost = report.packetsLost || 0;
+                                const sent = report.packetsSent || 1;
+                                const lossRate = lost / sent;
+
+                                pc.getSenders().forEach(sender => {
+                                    if (sender.track?.kind === 'video') {
+                                        const p = sender.getParameters();
+                                        if (lossRate > 0.02) {
+                                            p.encodings[0].maxBitrate = 2500000; // Drop to 2.5Mbps
+                                        } else {
+                                            p.encodings[0].maxBitrate = 8000000; // Back to 8Mbps
+                                        }
+                                        sender.setParameters(p).catch(() => {});
+                                    }
+                                });
+                            }
+                        });
+                    }, 5000);
                 }
             };
+            
+            call.on('close', () => { if(bitrateInterval) clearInterval(bitrateInterval); });
         }
 
         function disconnectPC() {
@@ -400,10 +473,17 @@
 
         // --- HP (RECEIVER) ---
         function setupReceiverPeer() {
-            if (peer) return; // Prevent multiple initializations
+            if (peer) return; 
             
-            // Create Peer with random ID for HP
-            peer = new Peer();
+            peer = new Peer(null, {
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
+                    ]
+                }
+            });
             
             peer.on('open', (id) => {
                 console.log("HP Peer ID:", id);
@@ -422,12 +502,9 @@
                     // Pastikan sinkronisasi audio video terjaga
                     Player.init(videoEl, call.peerConnection);
                     
-                    // Terapkan buffer stabil secara default untuk mencegah renyak
-                    if(currentMinDelay === 0) currentMinDelay = 100; 
-                    
+                    // Terapkan buffer stabil secara default (500ms)
                     setTimeout(() => {
-                        Player.setPlayoutDelay(currentMinDelay);
-                        document.getElementById('buffer-val-display').innerText = currentMinDelay + "ms";
+                        updateBuffer(500);
                     }, 1000);
 
                     videoEl.srcObject = remoteStream;
