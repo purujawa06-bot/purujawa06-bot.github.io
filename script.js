@@ -24,122 +24,186 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let peer = null;
     let currentConn = null;
+    let localStream = null;
+    let activeCall = null;
+    
+    // State management
+    let myState = { tool: null, role: null };
+    let remoteState = { tool: null, role: null };
 
-    // Inisialisasi PeerJS dengan konfigurasi eksplisit untuk keandalan
-    peer = new Peer(undefined, {
-        debug: 2
-    });
+    const roleOverlay = document.getElementById('role-overlay');
+    const roleTitle = document.getElementById('role-title');
+    const btnSender = document.getElementById('role-sender');
+    const btnReceiver = document.getElementById('role-receiver');
+    const btnCloseRole = document.getElementById('close-role');
+    const conflictWarn = document.getElementById('conflict-warn');
+    const conflictMsg = document.getElementById('conflict-msg');
+    const btnFullscreen = document.getElementById('btn-fullscreen');
+    const videoWrapper = document.getElementById('video-wrapper');
+
+    peer = new Peer(undefined, { debug: 2 });
 
     peer.on('open', (id) => {
-        console.log('My peer ID is: ' + id);
         myIdDisplay.innerText = id;
         peerIdInfo.innerText = "Siap menerima koneksi.";
-        
-        // Membersihkan QR container sebelum generate baru
         qrContainer.innerHTML = "";
-        
-        // Perbaikan pembentukan URL agar tidak duplikasi query string
         const baseUrl = window.location.href.split('?')[0];
         const connectUrl = baseUrl + "?join=" + id;
-        
-        new QRCode(qrContainer, {
-            text: connectUrl,
-            width: 200,
-            height: 200,
-            colorDark: "#0f172a",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.H
-        });
-        
-        // Cek jika kita adalah pihak yang mencoba join (dari URL)
+        new QRCode(qrContainer, { text: connectUrl, width: 200, height: 200 });
         const urlParams = new URLSearchParams(window.location.search);
         const joinId = urlParams.get('join');
-        if (joinId) {
-            peerIdInfo.innerText = "Menghubungkan ke: " + joinId;
-            connectToPeer(joinId);
-        }
+        if (joinId) connectToPeer(joinId);
     });
 
-    peer.on('error', (err) => {
-        console.error('PeerJS Error:', err);
-        peerIdInfo.innerText = "Kesalahan: " + err.type;
-        peerIdInfo.style.color = "#ef4444";
-    });
+    peer.on('connection', (conn) => setupConnection(conn));
 
-    // Menangani koneksi masuk
-    peer.on('connection', (conn) => {
-        setupConnection(conn);
-    });
-
-    // Menangani panggilan video masuk (Mirroring)
     peer.on('call', (call) => {
-        call.answer(); 
+        activeCall = call;
+        call.answer();
         mirrorOverlay.classList.remove('hidden');
-        call.on('stream', (remoteStream) => {
-            remoteVideo.srcObject = remoteStream;
+        call.on('stream', (stream) => {
+            remoteVideo.srcObject = stream;
             mirrorPlaceholder.classList.add('hidden');
             remoteVideo.classList.add('active');
+            document.getElementById('mirror-status-text').innerText = "Streaming Diterima";
         });
     });
 
     function connectToPeer(id) {
-        const conn = peer.connect(id);
-        setupConnection(conn);
+        setupConnection(peer.connect(id));
     }
 
     function setupConnection(conn) {
         currentConn = conn;
-        
         conn.on('open', () => {
             statusInd.innerText = 'Terhubung';
-            statusInd.classList.remove('offline');
-            statusInd.classList.add('online');
+            statusInd.classList.replace('offline', 'online');
             connScreen.classList.add('hidden');
             dashScreen.classList.remove('hidden');
             remoteIdDisplay.innerText = conn.peer;
         });
 
         conn.on('data', (data) => {
-            if (data.type === 'file') {
-                handleReceivedFile(data);
+            if (data.type === 'file') handleReceivedFile(data);
+            if (data.type === 'sync-state') {
+                remoteState = { tool: data.tool, role: data.role };
+                checkConflicts();
             }
         });
 
-        conn.on('close', () => {
-            disconnectUI();
-        });
+        conn.on('close', () => disconnectUI());
     }
 
-    // Fitur Share File
-    btnShareFile.addEventListener('click', () => {
-        fileInput.click();
+    function syncState(tool, role) {
+        myState = { tool, role };
+        if (currentConn) {
+            currentConn.send({ type: 'sync-state', tool, role });
+        }
+        checkConflicts();
+    }
+
+    function checkConflicts() {
+        conflictWarn.classList.add('hidden');
+        
+        if (myState.tool && myState.tool === remoteState.tool) {
+            if (myState.role === remoteState.role && myState.role !== null) {
+                conflictWarn.classList.remove('hidden');
+                conflictMsg.innerText = `Bentrok! Perangkat lawan juga memilih sebagai ${myState.role.toUpperCase()}.`;
+                return false;
+            }
+            return true;
+        }
+        
+        if (myState.tool && (!remoteState.tool || remoteState.tool !== myState.tool)) {
+            conflictWarn.classList.remove('hidden');
+            conflictMsg.innerText = "Menunggu perangkat lawan masuk ke alat yang sama...";
+            return false;
+        }
+        return true;
+    }
+
+    // Tool Handlers
+    btnShareFile.addEventListener('click', () => openRoleSelection('file'));
+    btnMirroring.addEventListener('click', () => openRoleSelection('mirror'));
+
+    function openRoleSelection(tool) {
+        myState.tool = tool;
+        roleTitle.innerText = tool === 'file' ? "Share File" : "Screen Mirroring";
+        roleOverlay.classList.remove('hidden');
+        syncState(tool, null);
+    }
+
+    btnSender.addEventListener('click', () => {
+        syncState(myState.tool, 'sender');
+        roleOverlay.classList.add('hidden');
+        executeRole();
     });
+
+    btnReceiver.addEventListener('click', () => {
+        syncState(myState.tool, 'receiver');
+        roleOverlay.classList.add('hidden');
+        executeRole();
+    });
+
+    function executeRole() {
+        if (!checkConflicts()) return;
+
+        if (myState.tool === 'file') {
+            if (myState.role === 'sender') fileInput.click();
+            else showToast("Siap menerima file...");
+        } else if (myState.tool === 'mirror') {
+            mirrorOverlay.classList.remove('hidden');
+            if (myState.role === 'sender') startCapture();
+            else document.getElementById('mirror-wait-msg').innerText = "Menunggu pengirim memulai layar...";
+        }
+    }
+
+    async function startCapture() {
+        try {
+            localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            const call = peer.call(currentConn.peer, localStream);
+            document.getElementById('mirror-status-text').innerText = "Sedang Berbagi Layar";
+            mirrorPlaceholder.classList.add('hidden');
+            
+            localStream.getVideoTracks()[0].onended = () => stopCapture();
+        } catch (err) {
+            console.error(err);
+            alert("Gagal mengakses rekaman layar.");
+        }
+    }
+
+    function stopCapture() {
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+        }
+        mirrorOverlay.classList.add('hidden');
+        syncState(null, null);
+    }
 
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file && currentConn) {
-            currentConn.send({
-                type: 'file',
-                fileName: file.name,
-                fileType: file.type,
-                blob: file
-            });
+        if (file && currentConn && myState.role === 'sender') {
+            currentConn.send({ type: 'file', fileName: file.name, fileType: file.type, blob: file });
             showToast(`Mengirim: ${file.name}`);
-            simulateProgress();
-        } else if (!currentConn) {
-            alert("Perangkat belum terhubung!");
+            simulateProgress(() => syncState(null, null));
         }
     });
 
-    // Fitur Mirroring (Informasi)
-    btnMirroring.addEventListener('click', () => {
-        if (!currentConn) {
-            alert("Hubungkan perangkat terlebih dahulu untuk memulai mirroring.");
-            return;
-        }
-        mirrorOverlay.classList.remove('hidden');
-        // Memberitahu pengirim (HP) untuk mulai streaming jika protokol diimplementasikan
-        currentConn.send({ type: 'command', action: 'start-mirror' });
+    btnFullscreen.addEventListener('click', () => {
+        if (videoWrapper.requestFullscreen) videoWrapper.requestFullscreen();
+        else if (videoWrapper.webkitRequestFullscreen) videoWrapper.webkitRequestFullscreen();
+    });
+
+    btnCloseRole.addEventListener('click', () => {
+        roleOverlay.classList.add('hidden');
+        syncState(null, null);
+    });
+
+    closeMirror.addEventListener('click', () => {
+        stopCapture();
+        if (activeCall) activeCall.close();
+        mirrorOverlay.classList.add('hidden');
     });
 
     function handleReceivedFile(data) {

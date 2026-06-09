@@ -66,23 +66,50 @@
                         <p>Fitur baru lainnya</p>
                     </div>
                 </div>
+                
+                <div id="conflict-warn" class="warning-box hidden">
+                    ⚠️ <span id="conflict-msg">Menunggu kesiapan perangkat lawan...</span>
+                </div>
 
                 <button id="sim-disconnect" class="btn-outline">Putuskan Koneksi</button>
             </div>
         </main>
 
+        <!-- Role Selection Overlay -->
+        <div id="role-overlay" class="modal hidden">
+            <div class="modal-content role-selection">
+                <h2 id="role-title">Pilih Peran Anda</h2>
+                <p id="role-desc">Tentukan apakah Anda ingin mengirim atau menerima.</p>
+                <div class="role-options">
+                    <button id="role-sender" class="role-btn">
+                        <span class="icon">📤</span>
+                        <span>PENGIRIM</span>
+                    </button>
+                    <button id="role-receiver" class="role-btn">
+                        <span class="icon">📥</span>
+                        <span>PENERIMA</span>
+                    </button>
+                </div>
+                <button id="close-role" class="btn-text">Batal</button>
+            </div>
+        </div>
+
         <!-- Mirroring Overlay -->
         <div id="mirror-overlay" class="modal hidden">
-            <div class="modal-content">
+            <div class="modal-content mirror-container">
                 <div class="modal-header">
-                    <h2>Screen Mirroring Aktif</h2>
-                    <button id="close-mirror" class="btn-close">&times;</button>
+                    <h2 id="mirror-status-text">Screen Mirroring</h2>
+                    <div class="header-actions">
+                        <button id="btn-fullscreen" class="btn-icon">⛶</button>
+                        <button id="close-mirror" class="btn-close">&times;</button>
+                    </div>
                 </div>
-                <div class="mirror-view">
+                <div class="mirror-view" id="video-wrapper">
                     <video id="remote-video" autoplay playsinline></video>
                     <div id="mirror-placeholder" class="phone-frame">
                         <div class="phone-content">
-                            <p>Menunggu Stream Video...</p>
+                            <div class="pulse-ring"></div>
+                            <p id="mirror-wait-msg">Menunggu Stream Video...</p>
                         </div>
                     </div>
                 </div>
