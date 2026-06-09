@@ -3,16 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC Screen Mirroring</title>
+    <title>WebRTC MirrorCast - Global Discovery</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="player.js"></script>
+    <style>
+        #video-wrapper {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: black;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+        }
+        .pulse-red {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
 </head>
 <body class="bg-gray-900 text-white font-sans min-h-screen flex flex-col items-center justify-center p-4">
 
     <div class="w-full max-w-md bg-gray-800 rounded-2xl shadow-xl p-6 text-center border border-gray-700">
-        <h1 class="text-2xl font-bold mb-6 text-blue-400">⚡ MirrorCast Screen & Audio</h1>
+        <h1 class="text-2xl font-bold mb-6 text-blue-400">⚡ MirrorCast Global</h1>
 
         <!-- Step 1: Role Selection -->
         <div id="step-role" class="space-y-4">
@@ -24,420 +50,413 @@
                 📱 Saya adalah HP (Receiver)
             </button>
             <div class="pt-4 border-t border-gray-700 mt-4">
-                <button onclick="openBrowseChoice()" class="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-2 px-4 rounded-xl transition duration-200 cursor-pointer text-sm">
-                    🔍 Mode Jelajah (Tanpa Koneksi)
+                <button onclick="openDiscovery()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 cursor-pointer">
+                    🌍 Join via Global Penyiar
                 </button>
             </div>
         </div>
 
-        <!-- Mode Jelajah -->
-        <div id="step-browse" class="hidden space-y-4">
-            <h2 class="text-lg font-bold text-gray-200">Mode Jelajah</h2>
-            <p class="text-gray-400 text-xs mb-4">Lihat pratinjau antarmuka tanpa menghubungkan perangkat.</p>
-            <div class="grid grid-cols-2 gap-3">
-                <button onclick="showPreview('PC')" class="bg-gray-800 border border-gray-700 hover:border-blue-500 p-4 rounded-xl flex flex-col items-center transition">
-                    <span class="text-2xl mb-2">💻</span>
-                    <span class="text-xs font-bold text-blue-400">Preview PC</span>
-                </button>
-                <button onclick="showPreview('HP')" class="bg-gray-800 border border-gray-700 hover:border-emerald-500 p-4 rounded-xl flex flex-col items-center transition">
-                    <span class="text-2xl mb-2">📱</span>
-                    <span class="text-xs font-bold text-emerald-400">Preview HP</span>
-                </button>
-            </div>
-            <button onclick="goHome()" class="text-gray-500 text-sm hover:underline mt-4 cursor-pointer">Kembali ke Menu Utama</button>
+        <!-- Step PC: Mode Selection (Public/Private) -->
+        <div id="step-pc-mode" class="hidden space-y-4">
+            <h2 class="text-lg font-bold text-blue-400">Pilih Mode Visibilitas</h2>
+            <p class="text-gray-400 text-xs px-4">Mode publik akan memunculkan PC Anda di daftar global agar mudah ditemukan HP lain tanpa scan.</p>
+            <button onclick="confirmPCMode(true)" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 cursor-pointer">
+                🌐 Mode Publik (Muncul di Daftar)
+            </button>
+            <button onclick="confirmPCMode(false)" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 cursor-pointer">
+                🔒 Mode Privat (Hanya via QR)
+            </button>
+            <button onclick="goHome()" class="text-gray-500 text-sm hover:underline block w-full mt-2">Kembali</button>
         </div>
 
-        <!-- Step PC: QR Display -->
+        <!-- Mode Discovery (List Penyiar) -->
+        <div id="step-discovery" class="hidden space-y-4">
+            <h2 class="text-lg font-bold text-gray-200">Penyiar Aktif</h2>
+            <div id="broadcaster-list" class="space-y-2 max-h-60 overflow-y-auto p-2">
+                <p class="text-gray-500 text-sm">Mencari penyiar di sekitar...</p>
+            </div>
+            <button onclick="refreshBroadcasters()" class="text-blue-400 text-xs hover:underline mt-2">🔄 Segarkan Daftar</button>
+            <div class="pt-4 border-t border-gray-700">
+                <button onclick="goHome()" class="text-gray-500 text-sm hover:underline">Kembali</button>
+            </div>
+        </div>
+
+        <!-- Step PC: QR & Connection Status -->
         <div id="step-pc-qr" class="hidden space-y-4">
-            <p class="text-gray-300 font-medium">Scan QR ini menggunakan HP Anda:</p>
+            <p class="text-gray-300 font-medium">Scan QR atau tunggu koneksi:</p>
             <div id="qrcode" class="bg-white p-4 rounded-xl inline-block my-2"></div>
-            <p class="text-xs text-gray-500 id-display">Menghubungkan ke server signaling...</p>
-            <div class="animate-pulse flex justify-center items-center space-x-2 text-yellow-500">
-                <span>Menunggu koneksi dari HP...</span>
+            <div class="bg-gray-700/50 p-3 rounded-lg">
+                <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Status Server Discovery</p>
+                <p id="pc-discovery-status" class="text-xs text-yellow-500">Mendaftarkan ke database...</p>
             </div>
+            <div class="animate-pulse flex justify-center items-center space-x-2 text-blue-400">
+                <span id="pc-wait-msg">Menunggu HP terhubung...</span>
+            </div>
+            <button onclick="goHome()" class="text-gray-500 text-sm hover:underline mt-4">Batalkan</button>
         </div>
 
         <!-- Step HP: QR Scanner -->
         <div id="step-hp-scan" class="hidden space-y-4">
-            <p class="text-gray-300 font-medium">Arahkan kamera ke QR Code di PC</p>
+            <p class="text-gray-300 font-medium">Scan QR Code di PC</p>
             <div id="reader" class="overflow-hidden rounded-xl bg-black"></div>
-            <p id="scan-status" class="text-xs text-gray-400">Menginisialisasi kamera...</p>
-            <div class="pt-2">
-                <button onclick="showPreview('HP')" class="w-full bg-gray-700/50 hover:bg-gray-600 text-gray-400 font-medium py-2 px-4 rounded-xl transition duration-200 cursor-pointer text-xs">
-                    Buka Mode Pratinjau Tanpa Scan
+            <div class="flex flex-col gap-2">
+                <button onclick="openDiscovery()" class="w-full bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 py-2 rounded-xl text-xs font-bold">
+                    Lihat Daftar Penyiar Aktif
                 </button>
+                <button onclick="goHome()" class="text-gray-500 text-sm hover:underline">Kembali</button>
             </div>
         </div>
 
         <!-- PC Dashboard -->
         <div id="step-pc-dashboard" class="hidden space-y-6 text-left">
-            <div id="pc-preview-badge" class="hidden bg-yellow-500/20 text-yellow-500 text-[10px] font-bold py-1 px-3 rounded-full text-center mb-2 border border-yellow-500/30 uppercase tracking-wider">Mode Pratinjau (Koneksi Tidak Aktif)</div>
-            <div class="border-b border-gray-700 pb-3 flex justify-between items-center">
+            <div class="flex justify-between items-center border-b border-gray-700 pb-3">
                 <h2 class="text-lg font-semibold text-blue-400">Control Panel PC</h2>
-                <button onclick="goHome()" title="Kembali ke Menu Utama" class="text-gray-500 hover:text-white transition cursor-pointer">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                </button>
+                <span class="flex h-2 w-2 rounded-full bg-green-500"></span>
             </div>
             
-            <div class="space-y-4">
-                <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col justify-between">
-                    <div>
-                        <h3 class="font-medium text-white">Mirroring Screen & Audio</h3>
-                        <p class="text-xs text-gray-400 mb-3">Bagikan layar dan suara sistem PC Anda ke HP. (Pastikan centang "Share Audio" saat memilih layar).</p>
-                    </div>
-                    <button id="btn-screen" onclick="toggleScreenMirroring()" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg text-sm font-bold transition cursor-pointer">
-                        Mulai Share Screen
-                    </button>
-                </div>
+            <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600">
+                <h3 class="font-medium text-white mb-1">Mirroring Active</h3>
+                <p id="pc-connection-info" class="text-[10px] text-gray-400 mb-4 font-mono">Connected to receiver</p>
+                <button id="btn-screen" onclick="toggleScreenMirroring()" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg text-sm font-bold transition">
+                    Mulai Share Screen
+                </button>
             </div>
+            <button onclick="disconnectPC()" class="w-full text-red-400 text-xs py-2 hover:bg-red-500/10 rounded-lg transition">Putuskan & Keluar</button>
         </div>
 
-        <!-- HP Receiver -->
+        <!-- HP Receiver UI (Sama seperti sebelumnya dengan sedikit update) -->
         <div id="step-hp-receiver" class="hidden space-y-4">
-            <div id="hp-preview-badge" class="hidden bg-yellow-500/20 text-yellow-500 text-[10px] font-bold py-1 px-3 rounded-full text-center mb-2 border border-yellow-500/30 uppercase tracking-wider">Mode Pratinjau (Koneksi Tidak Aktif)</div>
-            <div class="border-b border-gray-700 pb-3 flex justify-between items-center">
-                <h2 class="text-lg font-semibold text-emerald-400">Receiver Screen HP</h2>
-                <button onclick="goHome()" title="Kembali ke Menu Utama" class="text-gray-500 hover:text-white transition cursor-pointer">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+             <div class="border-b border-gray-700 pb-3 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-emerald-400">Receiver HP</h2>
+                <button onclick="disconnectHP()" class="text-gray-500 hover:text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
             </div>
 
-            <!-- Mode Controls -->
             <div class="bg-gray-800/50 p-3 rounded-xl border border-gray-700 space-y-3">
-                <div>
-                    <p class="text-[10px] text-gray-500 uppercase font-bold mb-2 tracking-widest text-center">Mode Performa</p>
-                    <div class="grid grid-cols-3 gap-2">
-                        <button onclick="setLatencyMode('latency')" id="btn-mode-latency" class="latency-btn flex flex-col items-center justify-center p-2 rounded-lg border bg-blue-600 border-blue-400 transition-all">
-                            <span class="text-[10px] font-bold">LATENCY</span>
-                            <span class="text-[8px] opacity-70">0-100ms</span>
-                        </button>
-                        <button onclick="setLatencyMode('balanced')" id="btn-mode-balanced" class="latency-btn flex flex-col items-center justify-center p-2 rounded-lg border bg-gray-700 border-gray-600 transition-all">
-                            <span class="text-[10px] font-bold">BALANCED</span>
-                            <span class="text-[8px] opacity-70">50-150ms</span>
-                        </button>
-                        <button onclick="setLatencyMode('quality')" id="btn-mode-quality" class="latency-btn flex flex-col items-center justify-center p-2 rounded-lg border bg-gray-700 border-gray-600 transition-all">
-                            <span class="text-[10px] font-bold">QUALITY</span>
-                            <span class="text-[8px] opacity-70">100-500ms</span>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="pt-2 border-t border-gray-700">
-                    <button id="btn-toggle-audio-only" onclick="toggleAudioOnlyMode()" class="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 rounded-lg transition flex items-center justify-center gap-2">
-                        <span id="audio-only-icon">📻</span> 
-                        <span id="audio-only-text">Aktifkan Mode Audio Saja</span>
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="setLatencyMode('latency')" id="btn-mode-latency" class="latency-btn flex flex-col items-center justify-center p-2 rounded-lg border bg-gray-700 border-gray-600">
+                        <span class="text-[10px] font-bold">LOW LATENCY</span>
+                    </button>
+                    <button onclick="setLatencyMode('balanced')" id="btn-mode-balanced" class="latency-btn flex flex-col items-center justify-center p-2 rounded-lg border bg-gray-700 border-gray-600">
+                        <span class="text-[10px] font-bold">BALANCED</span>
+                    </button>
+                    <button onclick="setLatencyMode('custom')" id="btn-mode-custom" class="latency-btn flex flex-col items-center justify-center p-2 rounded-lg border bg-gray-700 border-gray-600">
+                        <span class="text-[10px] font-bold">CUSTOM</span>
                     </button>
                 </div>
-            </div>
-            
-            <div id="video-container" class="relative group bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-gray-700">
-                <video id="remote-video" autoplay playsinline class="w-full h-full object-contain cursor-pointer" onclick="toggleFullScreen()"></video>
-                <p id="video-placeholder" class="absolute text-gray-500 text-sm pointer-events-none text-center px-4">Menunggu kiriman layar dari PC...</p>
                 
-                <!-- Audio Only UI overlay -->
-                <div id="audio-only-ui" class="hidden absolute inset-0 bg-gray-900 flex flex-col items-center justify-center p-6 text-center">
-                    <div class="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 animate-pulse">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                <!-- Custom Delay Inputs -->
+                <div id="custom-delay-ui" class="hidden grid grid-cols-2 gap-2 pt-2 border-t border-gray-700">
+                    <div>
+                        <label class="text-[9px] text-gray-400 block mb-1">MIN DELAY (ms)</label>
+                        <input type="number" id="min-delay" class="w-full bg-gray-900 border border-gray-600 rounded p-1 text-xs" placeholder="0">
                     </div>
-                    <h3 class="text-emerald-400 font-bold">Mode Audio Aktif</h3>
-                    <p class="text-xs text-gray-500 mt-1">Video dimatikan untuk hemat data</p>
-                    
-                    <div class="mt-6 flex items-center gap-4">
-                        <button onclick="controlAudioPlayback('play')" class="p-3 bg-gray-700 hover:bg-gray-600 rounded-full transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                        </button>
-                        <button onclick="controlAudioPlayback('pause')" class="p-3 bg-gray-700 hover:bg-gray-600 rounded-full transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                        </button>
+                    <div>
+                        <label class="text-[9px] text-gray-400 block mb-1">MAX DELAY (ms)</label>
+                        <input type="number" id="max-delay" class="w-full bg-gray-900 border border-gray-600 rounded p-1 text-xs" placeholder="500">
                     </div>
+                    <button onclick="saveAndApplyCustomDelay()" class="col-span-2 bg-emerald-600 text-[10px] font-bold py-1 rounded mt-1">SAVE & APPLY</button>
                 </div>
-
-                <button id="fullscreen-btn" onclick="toggleFullScreen()" class="absolute bottom-2 right-2 bg-black/50 hover:bg-black/80 text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-                </button>
             </div>
             
-            <p class="text-xs text-gray-400 italic text-left">💡 Tips: Klik video untuk mode layar penuh. Jika suara tidak terdengar, pastikan volume HP aktif dan berinteraksi dengan layar.</p>
-        </div>
+            <div id="video-container" class="relative bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-gray-700">
+                <div id="video-wrapper">
+                    <video id="remote-video" controls playsinline class="w-full h-full"></video>
+                </div>
+                <p id="video-placeholder" class="absolute z-10 text-gray-500 text-sm">Menunggu layar...</p>
+            </div>
 
+            <div class="flex justify-center gap-2">
+                <button onclick="handleZoom('out')" class="bg-gray-700 px-4 py-2 rounded-lg">-</button>
+                <span id="zoom-level" class="bg-gray-700 px-4 py-2 rounded-lg text-xs flex items-center">1.0x</span>
+                <button onclick="handleZoom('in')" class="bg-gray-700 px-4 py-2 rounded-lg">+</button>
+                <button onclick="changeVideoScale()" class="bg-blue-600 px-4 py-2 rounded-lg text-xs font-bold">Aspect</button>
+            </div>
+        </div>
     </div>
 
     <script>
-        let peer = null;
-        let peerId = null;
-        let connection = null;
-        let myRole = '';
-        let html5QrcodeScanner = null;
-        let activeScreenStream = null;
-        let activeCall = null;
-        let currentLatencyHint = 0; // Default: Latency mode (0 seconds)
-        let isAudioOnlyMode = false;
+        const FIREBASE_URL = "https://puru-tools-default-rtdb.firebaseio.com/mirroring/broadcasters";
+        let peer = null, connection = null, myRole = '', peerId = null;
+        let heartbeatInterval = null, activeScreenStream = null, activeCall = null;
+        let videoEl = document.getElementById('remote-video');
+        let isPublicMode = false;
 
-        // Element Selectors
-        const elRole = document.getElementById('step-role');
-        const elPcQr = document.getElementById('step-pc-qr');
-        const elHpScan = document.getElementById('step-hp-scan');
-        const elPcDashboard = document.getElementById('step-pc-dashboard');
-        const elHpReceiver = document.getElementById('step-hp-receiver');
-        const elBrowse = document.getElementById('step-browse');
-        const pcBadge = document.getElementById('pc-preview-badge');
-        const hpBadge = document.getElementById('hp-preview-badge');
-        const elAudioOnlyUI = document.getElementById('audio-only-ui');
-        const videoEl = document.getElementById('remote-video');
+        // Navigasi UI
+        function hideAll() {
+            ['step-role', 'step-discovery', 'step-pc-qr', 'step-hp-scan', 'step-pc-dashboard', 'step-hp-receiver', 'step-pc-mode']
+            .forEach(id => document.getElementById(id).classList.add('hidden'));
+        }
 
         function initRole(role) {
             myRole = role;
-            hideAllSteps();
-
+            hideAll();
             if (role === 'PC') {
-                elPcQr.classList.remove('hidden');
-                setupPC();
+                document.getElementById('step-pc-mode').classList.remove('hidden');
             } else {
-                elHpScan.classList.remove('hidden');
+                document.getElementById('step-hp-scan').classList.remove('hidden');
                 setupHP();
             }
         }
 
-        function openBrowseChoice() {
-            hideAllSteps();
-            elBrowse.classList.remove('hidden');
-        }
-
-        function showPreview(role) {
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear().catch(() => {});
-            }
-            hideAllSteps();
-            if (role === 'PC') {
-                elPcDashboard.classList.remove('hidden');
-                pcBadge.classList.remove('hidden');
-            } else {
-                elHpReceiver.classList.remove('hidden');
-                hpBadge.classList.remove('hidden');
-            }
+        function confirmPCMode(isPublic) {
+            isPublicMode = isPublic;
+            hideAll();
+            document.getElementById('step-pc-qr').classList.remove('hidden');
+            setupPC();
         }
 
         function goHome() {
-            if (activeScreenStream) {
-                activeScreenStream.getTracks().forEach(t => t.stop());
-            }
-            
-            hideAllSteps();
-            elRole.classList.remove('hidden');
-            pcBadge.classList.add('hidden');
-            hpBadge.classList.add('hidden');
-            
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear().catch(() => {});
+            stopHeartbeat();
+            if (myRole === 'PC') cleanupFirebase(peerId);
+            location.reload();
+        }
+
+        // --- FIREBASE LOGIC ---
+        async function updateHeartbeat(id) {
+            try {
+                const data = {
+                    id: id,
+                    timestamp: Date.now(),
+                    label: "PC-" + id.substr(0, 4).toUpperCase()
+                };
+                await fetch(`${FIREBASE_URL}/${id}.json`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+                document.getElementById('pc-discovery-status').innerText = "✅ Aktif di Database (Broadcasting)";
+            } catch (e) {
+                console.error("Firebase Ping Error", e);
             }
         }
 
-        function hideAllSteps() {
-            [elRole, elPcQr, elHpScan, elPcDashboard, elHpReceiver, elBrowse].forEach(el => el.classList.add('hidden'));
+        async function cleanupFirebase(id) {
+            if (!id) return;
+            try {
+                await fetch(`${FIREBASE_URL}/${id}.json`, { method: 'DELETE' });
+            } catch (e) {}
         }
 
-        // --- SENDER (PC) LOGIC ---
+        function startHeartbeat(id) {
+            updateHeartbeat(id);
+            heartbeatInterval = setInterval(() => {
+                // Jika sudah ada koneksi, kita tetap kirim heartbeat agar HP lain tahu kita sibuk 
+                // atau kita bisa berhenti tergantung keinginan. Di sini kita tetap aktif.
+                updateHeartbeat(id);
+            }, 5000);
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+        }
+
+        // --- PC (SENDER) ---
         function setupPC() {
-            peerId = 'mirror-' + Math.random().toString(36).substr(2, 9);
+            peerId = 'mc-' + Math.random().toString(36).substr(2, 6);
             peer = new Peer(peerId);
 
             peer.on('open', (id) => {
-                document.querySelectorAll('.id-display').forEach(el => el.innerText = "ID: " + id);
-                new QRCode(document.getElementById("qrcode"), {
-                    text: id,
-                    width: 200,
-                    height: 200,
-                    colorDark : "#000000",
-                    colorLight : "#ffffff",
-                    correctLevel : QRCode.CorrectLevel.H
-                });
+                new QRCode(document.getElementById("qrcode"), { text: id, width: 180, height: 180 });
+                if (isPublicMode) {
+                    startHeartbeat(id);
+                } else {
+                    document.getElementById('pc-discovery-status').innerText = "🔒 Mode Privat (Tidak Terdaftar di Global)";
+                    document.getElementById('pc-discovery-status').classList.replace('text-yellow-500', 'text-gray-400');
+                }
             });
 
             peer.on('connection', (conn) => {
                 connection = conn;
-                elPcQr.classList.add('hidden');
-                elPcDashboard.classList.remove('hidden');
-
-                // Mendengarkan instruksi dari HP
-                connection.on('data', (data) => {
-                    if (data.type === 'TOGGLE_VIDEO') {
-                        if (activeScreenStream) {
-                            const videoTrack = activeScreenStream.getVideoTracks()[0];
-                            if (videoTrack) {
-                                videoTrack.enabled = data.enabled;
-                                console.log("Video track " + (data.enabled ? "enabled" : "disabled") + " by receiver");
-                            }
-                        }
-                    }
+                hideAll();
+                document.getElementById('step-pc-dashboard').classList.remove('hidden');
+                document.getElementById('pc-connection-info').innerText = "Terhubung ke: " + conn.peer;
+                
+                connection.on('close', () => {
+                    alert("Receiver terputus.");
+                    goHome();
                 });
             });
+
+            // Cleanup on browser close
+            window.onbeforeunload = () => cleanupFirebase(peerId);
         }
 
         async function toggleScreenMirroring() {
-            if (!connection && !activeScreenStream) {
-                alert("Mode Pratinjau: Anda harus terhubung ke HP untuk melakukan streaming layar.");
-                return;
-            }
             const btn = document.getElementById('btn-screen');
-            
             if (activeScreenStream) {
-                activeScreenStream.getTracks().forEach(track => track.stop());
-                if (activeCall) activeCall.close();
+                activeScreenStream.getTracks().forEach(t => t.stop());
                 activeScreenStream = null;
-                activeCall = null;
-                
                 btn.innerText = "Mulai Share Screen";
                 btn.classList.replace('bg-red-600', 'bg-blue-600');
-                btn.classList.replace('hover:bg-red-500', 'hover:bg-blue-500');
             } else {
                 try {
-                    // Mengaktifkan audio: true akan memicu opsi "Share tab audio" atau "System audio" di browser
-                    const stream = await navigator.mediaDevices.getDisplayMedia({ 
-                        video: true, 
+                    // High Quality Constraints
+                    const constraints = {
+                        video: {
+                            cursor: "always",
+                            frameRate: { ideal: 60, max: 60 },
+                            width: { ideal: 3840, max: 3840 },
+                            height: { ideal: 2160, max: 2160 }
+                        },
                         audio: {
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
-                        } 
-                    });
-                    const call = peer.call(connection.peer, stream);
-                    
+                            echoCancellation: false,
+                            noiseSuppression: false,
+                            autoGainControl: false,
+                            sampleRate: 48000,
+                            sampleSize: 16
+                        }
+                    };
+                    const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
                     activeScreenStream = stream;
-                    activeCall = call;
-                    
+                    peer.call(connection.peer, stream);
                     btn.innerText = "🛑 Berhenti Share Screen";
                     btn.classList.replace('bg-blue-600', 'bg-red-600');
-                    btn.classList.replace('hover:bg-blue-500', 'hover:bg-red-500');
-
-                    stream.getVideoTracks()[0].onended = () => {
-                        if (activeScreenStream) toggleScreenMirroring();
-                    };
-                } catch (err) {
-                    console.error("Gagal share screen:", err);
-                }
+                } catch (err) { alert("Gagal akses layar: " + err); }
             }
         }
 
-        // --- RECEIVER (HP) LOGIC ---
-        function setLatencyMode(mode) {
-            const btns = document.querySelectorAll('.latency-btn');
-            btns.forEach(b => {
-                b.classList.replace('bg-blue-600', 'bg-gray-700');
-                b.classList.replace('border-blue-400', 'border-gray-600');
-            });
-
-            const activeBtn = document.getElementById('btn-mode-' + mode);
-            activeBtn.classList.replace('bg-gray-700', 'bg-blue-600');
-            activeBtn.classList.replace('border-gray-600', 'border-blue-400');
-
-            // playoutDelayHint dalam detik
-            if (mode === 'latency') currentLatencyHint = 0;
-            else if (mode === 'balanced') currentLatencyHint = 0.1; // ~100ms
-            else if (mode === 'quality') currentLatencyHint = 0.4; // ~400ms
-
-            applyLatencyToActiveCall();
+        function disconnectPC() {
+            if (isPublicMode) cleanupFirebase(peerId);
+            goHome();
         }
 
-        function applyLatencyToActiveCall() {
-            if (activeCall && activeCall.peerConnection) {
-                activeCall.peerConnection.getReceivers().forEach(receiver => {
-                    if ('playoutDelayHint' in receiver) {
-                        receiver.playoutDelayHint = currentLatencyHint;
-                        console.log("Latency hint applied:", currentLatencyHint);
-                    }
-                });
-            }
-        }
-
+        // --- HP (RECEIVER) ---
         function setupHP() {
             peer = new Peer();
-
-            peer.on('open', (id) => {
-                document.getElementById('scan-status').innerText = "Kamera siap. Silakan scan.";
-                startScanner();
-            });
-
             peer.on('call', (call) => {
-                activeCall = call; // Simpan call secara global untuk HP
+                activeCall = call;
                 call.answer();
                 call.on('stream', (remoteStream) => {
-                    const videoEl = document.getElementById('remote-video');
+                    Player.init(videoEl);
                     videoEl.srcObject = remoteStream;
                     document.getElementById('video-placeholder').classList.add('hidden');
-                    
-                    // Terapkan setting latency saat stream dimulai
-                    applyLatencyToActiveCall();
-                    
-                    remoteStream.getVideoTracks()[0].onended = () => {
-                        videoEl.srcObject = null;
-                        document.getElementById('video-placeholder').classList.remove('hidden');
-                    };
                 });
             });
+            startScanner();
         }
 
         function startScanner() {
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+            const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+            scanner.render((id) => {
+                scanner.clear();
+                connectToBroadcaster(id);
+            });
         }
 
-        function onScanSuccess(decodedText) {
-            html5QrcodeScanner.clear();
-            document.getElementById('step-hp-scan').classList.add('hidden');
-            elHpReceiver.classList.remove('hidden');
-            connection = peer.connect(decodedText);
+        function openDiscovery() {
+            hideAll();
+            document.getElementById('step-discovery').classList.remove('hidden');
+            refreshBroadcasters();
         }
 
-        function onScanFailure(error) {}
-
-        function toggleAudioOnlyMode() {
-            isAudioOnlyMode = !isAudioOnlyMode;
+        async function refreshBroadcasters() {
+            const listEl = document.getElementById('broadcaster-list');
+            listEl.innerHTML = '<p class="text-xs text-blue-400 animate-pulse">Memindai database...</p>';
             
-            const btnText = document.getElementById('audio-only-text');
-            const btnIcon = document.getElementById('audio-only-icon');
-            const fullScreenBtn = document.getElementById('fullscreen-btn');
+            try {
+                const res = await fetch(`${FIREBASE_URL}.json`);
+                const data = await res.json();
+                listEl.innerHTML = '';
+                
+                if (!data) {
+                    listEl.innerHTML = '<p class="text-gray-500 text-xs">Tidak ada penyiar aktif.</p>';
+                    return;
+                }
 
-            if (isAudioOnlyMode) {
-                elAudioOnlyUI.classList.remove('hidden');
-                btnText.innerText = "Kembali ke Mode Video";
-                btnIcon.innerText = "📺";
-                fullScreenBtn.classList.add('hidden');
+                const now = Date.now();
+                let count = 0;
+
+                for (let key in data) {
+                    const b = data[key];
+                    // Deteksi jika penyiar tidak kirim ping > 15 detik (dianggap mati)
+                    if (now - b.timestamp < 15000) {
+                        const btn = document.createElement('button');
+                        btn.className = "w-full bg-gray-700 hover:bg-blue-600/30 border border-gray-600 p-3 rounded-xl flex justify-between items-center transition";
+                        btn.innerHTML = `
+                            <div class="text-left">
+                                <div class="text-sm font-bold">${b.label}</div>
+                                <div class="text-[9px] text-gray-400 font-mono">${b.id}</div>
+                            </div>
+                            <span class="text-[10px] bg-green-500/20 text-green-400 px-2 py-1 rounded">ONLINE</span>
+                        `;
+                        btn.onclick = () => connectToBroadcaster(b.id);
+                        listEl.appendChild(btn);
+                        count++;
+                    } else {
+                        // Hapus data stale secara otomatis (pembersihan dari sisi receiver)
+                        cleanupFirebase(key);
+                    }
+                }
+
+                if (count === 0) listEl.innerHTML = '<p class="text-gray-500 text-xs">Penyiar baru saja offline.</p>';
+
+            } catch (e) {
+                listEl.innerHTML = '<p class="text-red-400 text-xs">Gagal memuat daftar.</p>';
+            }
+        }
+
+        function connectToBroadcaster(id) {
+            hideAll();
+            document.getElementById('step-hp-receiver').classList.remove('hidden');
+            connection = peer.connect(id);
+            connection.on('open', () => console.log("Connected to " + id));
+            connection.on('close', () => {
+                alert("Penyiar berhenti.");
+                goHome();
+            });
+        }
+
+        function disconnectHP() {
+            if (activeCall) activeCall.close();
+            goHome();
+        }
+
+        // --- PLAYER CONTROLS (ZOOM/SCALE) ---
+        function handleZoom(dir) {
+            let z = (dir === 'in') ? Player.zoomIn() : Player.zoomOut();
+            document.getElementById('zoom-level').innerText = z.toFixed(1) + 'x';
+        }
+        function changeVideoScale() { Player.toggleScaleMode(); }
+        function setLatencyMode(m) {
+            const btns = document.querySelectorAll('.latency-btn');
+            btns.forEach(b => {
+                b.classList.remove('bg-blue-600');
+                b.classList.add('bg-gray-700');
+            });
+            document.getElementById('btn-mode-'+m).classList.replace('bg-gray-700', 'bg-blue-600');
+            
+            const customUI = document.getElementById('custom-delay-ui');
+            if (m === 'custom') {
+                customUI.classList.remove('hidden');
+                loadSavedDelay();
             } else {
-                elAudioOnlyUI.classList.add('hidden');
-                btnText.innerText = "Aktifkan Mode Audio Saja";
-                btnIcon.innerText = "📻";
-                fullScreenBtn.classList.remove('hidden');
-            }
-
-            // Kirim sinyal ke PC untuk mematikan/menghidupkan track video
-            if (connection && connection.open) {
-                connection.send({
-                    type: 'TOGGLE_VIDEO',
-                    enabled: !isAudioOnlyMode
-                });
+                customUI.classList.add('hidden');
+                let min = 0, max = 0;
+                if (m === 'latency') { min = 0; max = 100; }
+                if (m === 'balanced') { min = 200; max = 500; }
+                Player.setPlayoutDelay(min, max);
             }
         }
 
-        function controlAudioPlayback(action) {
-            if (!videoEl) return;
-            if (action === 'play') {
-                videoEl.play();
-            } else if (action === 'pause') {
-                videoEl.pause();
-            }
+        function saveAndApplyCustomDelay() {
+            const min = parseInt(document.getElementById('min-delay').value) || 0;
+            const max = parseInt(document.getElementById('max-delay').value) || 0;
+            localStorage.setItem('mc_min_delay', min);
+            localStorage.setItem('mc_max_delay', max);
+            Player.setPlayoutDelay(min, max);
+            alert("Delay diterapkan: " + min + "ms - " + max + "ms");
         }
 
-        function toggleFullScreen() {
-            const videoEl = document.getElementById('remote-video');
-            if (!videoEl.srcObject) return;
-
-            if (!document.fullscreenElement) {
-                if (videoEl.requestFullscreen) videoEl.requestFullscreen();
-                else if (videoEl.webkitRequestFullscreen) videoEl.webkitRequestFullscreen();
-            } else {
-                if (document.exitFullscreen) document.exitFullscreen();
-            }
+        function loadSavedDelay() {
+            const min = localStorage.getItem('mc_min_delay') || 0;
+            const max = localStorage.getItem('mc_max_delay') || 500;
+            document.getElementById('min-delay').value = min;
+            document.getElementById('max-delay').value = max;
         }
+
+        // Global browse choice
+        function openBrowseChoice() { openDiscovery(); }
     </script>
 </body>
 </html>
