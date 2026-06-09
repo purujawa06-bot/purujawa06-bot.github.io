@@ -46,32 +46,45 @@
             </div>
             
             <div class="space-y-4">
+                <!-- Screen Mirroring -->
                 <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col justify-between">
                     <div>
                         <h3 class="font-medium text-white">1. Mirroring Screen</h3>
                         <p class="text-xs text-gray-400 mb-3">Bagikan layar monitor atau jendela aplikasi PC Anda ke HP.</p>
                     </div>
-                    <button id="btn-screen" onclick="startScreenMirroring()" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
+                    <button id="btn-screen" onclick="toggleScreenMirroring()" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
                         Mulai Share Screen
                     </button>
                 </div>
 
+                <!-- Mic Mirroring -->
                 <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col justify-between">
                     <div>
                         <h3 class="font-medium text-white">2. Mirroring Input Audio (Microphone)</h3>
-                        <p class="text-xs text-gray-400 mb-3">Kirim suara dari Microphone PC ke HP.</p>
+                        <div class="mb-3">
+                            <label class="text-[10px] text-gray-500 uppercase font-bold">Pilih Device:</label>
+                            <select id="select-mic" class="w-full bg-gray-800 text-xs border border-gray-600 rounded mt-1 p-1 outline-none focus:border-purple-500"></select>
+                        </div>
                     </div>
-                    <button id="btn-mic" onclick="startAudioMirroring('mic')" class="w-full bg-purple-600 hover:bg-purple-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
+                    <button id="btn-mic" onclick="toggleAudioMirroring('mic')" class="w-full bg-purple-600 hover:bg-purple-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
                         Mulai Share Mic
                     </button>
                 </div>
 
+                <!-- System Audio Mirroring -->
                 <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col justify-between">
                     <div>
                         <h3 class="font-medium text-white">3. Mirroring Output Audio (System Sound)</h3>
-                        <p class="text-xs text-gray-400 mb-3">Kirim suara internal PC (wajib centang "Share audio" saat memilih tab/layar).</p>
+                        <p class="text-xs text-gray-400 mb-1 italic">Metode A: Gunakan "Share Audio" saat Share Screen.</p>
+                        <p class="text-xs text-gray-400 mb-2 italic">Metode B: Pilih 'Stereo Mix' / Virtual Cable di bawah:</p>
+                        <div class="mb-3">
+                            <label class="text-[10px] text-gray-500 uppercase font-bold">Pilih Device (Opsional):</label>
+                            <select id="select-system" class="w-full bg-gray-800 text-xs border border-gray-600 rounded mt-1 p-1 outline-none focus:border-pink-500">
+                                <option value="native">Gunakan Native Browser (Prompt)</option>
+                            </select>
+                        </div>
                     </div>
-                    <button id="btn-system-audio" onclick="startAudioMirroring('system')" class="w-full bg-pink-600 hover:bg-pink-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
+                    <button id="btn-system-audio" onclick="toggleAudioMirroring('system')" class="w-full bg-pink-600 hover:bg-pink-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
                         Mulai Share Audio Sistem
                     </button>
                 </div>
@@ -84,9 +97,12 @@
                 <span class="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded-full font-mono">Streaming Active</span>
             </div>
             
-            <div class="relative bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-gray-700">
-                <video id="remote-video" autoplay playsinline class="w-full h-full object-contain"></video>
-                <p id="video-placeholder" class="absolute text-gray-500 text-sm">Menunggu kiriman layar/audio dari PC...</p>
+            <div class="relative group bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-gray-700">
+                <video id="remote-video" autoplay playsinline class="w-full h-full object-contain cursor-pointer" onclick="toggleFullScreen()"></video>
+                <p id="video-placeholder" class="absolute text-gray-500 text-sm pointer-events-none">Menunggu kiriman layar/audio dari PC...</p>
+                <button onclick="toggleFullScreen()" class="absolute bottom-2 right-2 bg-black/50 hover:bg-black/80 text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                </button>
             </div>
 
             <audio id="remote-audio" autoplay playsinline></audio>
@@ -102,6 +118,18 @@
         let connection = null;
         let myRole = '';
         let html5QrcodeScanner = null;
+
+        // Track active streams and calls
+        let activeStreams = {
+            screen: null,
+            mic: null,
+            system: null
+        };
+        let activeCalls = {
+            screen: null,
+            mic: null,
+            system: null
+        };
 
         // Element Selectors
         const elRole = document.getElementById('step-role');
@@ -152,54 +180,136 @@
             });
         }
 
-        function handleConnection() {
+        async function handleConnection() {
             // Jika sukses terhubung, pindah ke kontrol dashboard PC
             elPcQr.classList.add('hidden');
             elPcDashboard.classList.remove('hidden');
-        }
-
-        // 1. Fungsi Mirroring Layar PC
-        async function startScreenMirroring() {
+            
+            // Minta izin mic sebentar untuk mendapatkan label device
             try {
-                // Mengambil resource layar PC
-                const stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: true,
-                    audio: false // Kita pisah dengan opsi audio sistem di bawah
-                });
-                
-                // Panggil HP dan kirim stream video
-                peer.call(connection.peer, stream);
-                document.getElementById('btn-screen').innerText = "🟢 Layar Sedang Dibagikan";
-                document.getElementById('btn-screen').disabled = true;
-            } catch (err) {
-                console.error("Gagal share screen:", err);
-                alert("Gagal mengakses fitur Share Screen. Pastikan browser mendukung.");
+                const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                tempStream.getTracks().forEach(t => t.stop());
+                await refreshDeviceList();
+            } catch (e) {
+                console.error("Izin mic ditolak, label perangkat mungkin tidak muncul.");
             }
         }
 
-        // 2 & 3. Fungsi Mirroring Audio (Mic atau System)
-        async function startAudioMirroring(type) {
-            try {
-                let stream;
-                if (type === 'mic') {
-                    // Mengambil input microphone
-                    stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-                    document.getElementById('btn-mic').innerText = "🟢 Microphone Aktif";
-                    document.getElementById('btn-mic').disabled = true;
-                } else if (type === 'system') {
-                    // Mengambil output suara sistem melalui getDisplayMedia (wajib centang share audio saat pop-up browser muncul)
-                    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                    // Matikan trek video karena kita hanya butuh audionya saja
-                    stream.getVideoTracks().forEach(track => track.stop());
-                    document.getElementById('btn-system-audio').innerText = "🟢 Audio Sistem Aktif";
-                    document.getElementById('btn-system-audio').disabled = true;
-                }
+        async function refreshDeviceList() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const micSelect = document.getElementById('select-mic');
+            const sysSelect = document.getElementById('select-system');
+            
+            micSelect.innerHTML = '';
+            // Reset system select but keep native option
+            sysSelect.innerHTML = '<option value="native">Gunakan Native Browser (Prompt)</option>';
 
-                // Panggil HP dan kirim stream audio
-                peer.call(connection.peer, stream);
-            } catch (err) {
-                console.error("Gagal share audio:", err);
-                alert("Gagal membagikan audio. Pastikan Anda memberikan izin akses device.");
+            devices.forEach(device => {
+                if (device.kind === 'audioinput') {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Device ${micSelect.length + 1}`;
+                    
+                    micSelect.appendChild(option.cloneNode(true));
+                    sysSelect.appendChild(option.cloneNode(true));
+                }
+            });
+        }
+
+        // 1. Fungsi Mirroring Layar PC (Toggle)
+        async function toggleScreenMirroring() {
+            const btn = document.getElementById('btn-screen');
+            
+            if (activeStreams.screen) {
+                // STOP
+                activeStreams.screen.getTracks().forEach(track => track.stop());
+                if (activeCalls.screen) activeCalls.screen.close();
+                activeStreams.screen = null;
+                activeCalls.screen = null;
+                
+                btn.innerText = "Mulai Share Screen";
+                btn.classList.replace('bg-red-600', 'bg-blue-600');
+                btn.classList.replace('hover:bg-red-500', 'hover:bg-blue-500');
+            } else {
+                // START
+                try {
+                    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+                    const call = peer.call(connection.peer, stream);
+                    
+                    activeStreams.screen = stream;
+                    activeCalls.screen = call;
+                    
+                    btn.innerText = "🛑 Berhenti Share Screen";
+                    btn.classList.replace('bg-blue-600', 'bg-red-600');
+                    btn.classList.replace('hover:bg-blue-500', 'hover:bg-red-500');
+
+                    // Detect when user clicks "Stop Sharing" from browser toolbar
+                    stream.getVideoTracks()[0].onended = () => {
+                        if (activeStreams.screen) toggleScreenMirroring();
+                    };
+                } catch (err) {
+                    console.error("Gagal share screen:", err);
+                }
+            }
+        }
+
+        // 2 & 3. Fungsi Mirroring Audio (Toggle)
+        async function toggleAudioMirroring(type) {
+            const btnId = type === 'mic' ? 'btn-mic' : 'btn-system-audio';
+            const selectId = type === 'mic' ? 'select-mic' : 'select-system';
+            const btn = document.getElementById(btnId);
+            const selectEl = document.getElementById(selectId);
+            const defaultBg = type === 'mic' ? 'bg-purple-600' : 'bg-pink-600';
+            const hoverBg = type === 'mic' ? 'hover:bg-purple-500' : 'hover:bg-pink-500';
+
+            if (activeStreams[type]) {
+                // STOP
+                activeStreams[type].getTracks().forEach(track => track.stop());
+                if (activeCalls[type]) activeCalls[type].close();
+                activeStreams[type] = null;
+                activeCalls[type] = null;
+                
+                btn.innerText = type === 'mic' ? "Mulai Share Mic" : "Mulai Share Audio Sistem";
+                btn.classList.replace('bg-red-600', defaultBg);
+                btn.classList.replace('hover:bg-red-500', hoverBg);
+                selectEl.disabled = false;
+            } else {
+                // START
+                try {
+                    let stream;
+                    const selectedDeviceId = selectEl.value;
+
+                    if (type === 'mic') {
+                        stream = await navigator.mediaDevices.getUserMedia({ 
+                            video: false, 
+                            audio: { deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined } 
+                        });
+                    } else {
+                        // Jika milih 'native', pakai getDisplayMedia (standar)
+                        // Jika milih device ID tertentu (misal Stereo Mix), pakai getUserMedia
+                        if (selectedDeviceId === 'native') {
+                            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                            stream.getVideoTracks().forEach(track => track.stop());
+                        } else {
+                            stream = await navigator.mediaDevices.getUserMedia({ 
+                                video: false, 
+                                audio: { deviceId: { exact: selectedDeviceId } } 
+                            });
+                        }
+                    }
+
+                    const call = peer.call(connection.peer, stream);
+                    selectEl.disabled = true;
+                    activeStreams[type] = stream;
+                    activeCalls[type] = call;
+
+                    btn.innerText = "🛑 Berhenti Audio";
+                    btn.classList.replace(defaultBg, 'bg-red-600');
+                    btn.classList.replace(hoverBg, 'hover:bg-red-500');
+                } catch (err) {
+                    console.error("Gagal share audio:", err);
+                    alert("Gagal membagikan audio.");
+                }
             }
         }
 
@@ -217,19 +327,31 @@
 
             // Mendengarkan kiriman Media Stream (Video/Audio) dari PC
             peer.on('call', (call) => {
-                call.answer(); // Jawab panggilan tanpa mengirim balik stream HP
+                call.answer();
                 
                 call.on('stream', (remoteStream) => {
                     document.getElementById('video-placeholder').classList.add('hidden');
                     
-                    // Deteksi apakah stream mengandung Video atau hanya Audio
                     if (remoteStream.getVideoTracks().length > 0) {
                         const videoEl = document.getElementById('remote-video');
                         videoEl.srcObject = remoteStream;
+                        
+                        remoteStream.getVideoTracks()[0].onended = () => {
+                            videoEl.srcObject = null;
+                            document.getElementById('video-placeholder').classList.remove('hidden');
+                        };
                     } else if (remoteStream.getAudioTracks().length > 0) {
                         const audioEl = document.getElementById('remote-audio');
                         audioEl.srcObject = remoteStream;
+
+                        remoteStream.getAudioTracks()[0].onended = () => {
+                            audioEl.srcObject = null;
+                        };
                     }
+                });
+
+                call.on('close', () => {
+                    // Opsional: Reset jika call ditutup paksa
                 });
             });
         }
@@ -256,6 +378,26 @@
 
         function onScanFailure(error) {
             // Scan gagal berulang kali sewaktu mencari QR (diabaikan agar terus mencari)
+        }
+
+        // Fungsi Fullscreen untuk Video
+        function toggleFullScreen() {
+            const videoEl = document.getElementById('remote-video');
+            if (!videoEl.srcObject) return; // Abaikan jika tidak ada stream aktif
+
+            if (!document.fullscreenElement) {
+                if (videoEl.requestFullscreen) {
+                    videoEl.requestFullscreen();
+                } else if (videoEl.webkitRequestFullscreen) { // Kompatibilitas Safari/iOS
+                    videoEl.webkitRequestFullscreen();
+                } else if (videoEl.msRequestFullscreen) { // Kompatibilitas IE
+                    videoEl.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
         }
     </script>
 </body>
