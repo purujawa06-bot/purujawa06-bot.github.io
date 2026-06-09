@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC Screen & Audio Mirroring</title>
+    <title>WebRTC Screen Mirroring</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -12,8 +12,9 @@
 <body class="bg-gray-900 text-white font-sans min-h-screen flex flex-col items-center justify-center p-4">
 
     <div class="w-full max-w-md bg-gray-800 rounded-2xl shadow-xl p-6 text-center border border-gray-700">
-        <h1 class="text-2xl font-bold mb-6 text-blue-400">⚡ MirrorCast WebRTC</h1>
+        <h1 class="text-2xl font-bold mb-6 text-blue-400">⚡ MirrorCast Screen & Audio</h1>
 
+        <!-- Step 1: Role Selection -->
         <div id="step-role" class="space-y-4">
             <p class="text-gray-400 mb-4">Pilih peran perangkat ini:</p>
             <button onclick="initRole('PC')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 cursor-pointer">
@@ -22,8 +23,31 @@
             <button onclick="initRole('HP')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 cursor-pointer">
                 📱 Saya adalah HP (Receiver)
             </button>
+            <div class="pt-4 border-t border-gray-700 mt-4">
+                <button onclick="openBrowseChoice()" class="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-2 px-4 rounded-xl transition duration-200 cursor-pointer text-sm">
+                    🔍 Mode Jelajah (Tanpa Koneksi)
+                </button>
+            </div>
         </div>
 
+        <!-- Mode Jelajah -->
+        <div id="step-browse" class="hidden space-y-4">
+            <h2 class="text-lg font-bold text-gray-200">Mode Jelajah</h2>
+            <p class="text-gray-400 text-xs mb-4">Lihat pratinjau antarmuka tanpa menghubungkan perangkat.</p>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="showPreview('PC')" class="bg-gray-800 border border-gray-700 hover:border-blue-500 p-4 rounded-xl flex flex-col items-center transition">
+                    <span class="text-2xl mb-2">💻</span>
+                    <span class="text-xs font-bold text-blue-400">Preview PC</span>
+                </button>
+                <button onclick="showPreview('HP')" class="bg-gray-800 border border-gray-700 hover:border-emerald-500 p-4 rounded-xl flex flex-col items-center transition">
+                    <span class="text-2xl mb-2">📱</span>
+                    <span class="text-xs font-bold text-emerald-400">Preview HP</span>
+                </button>
+            </div>
+            <button onclick="goHome()" class="text-gray-500 text-sm hover:underline mt-4 cursor-pointer">Kembali ke Menu Utama</button>
+        </div>
+
+        <!-- Step PC: QR Display -->
         <div id="step-pc-qr" class="hidden space-y-4">
             <p class="text-gray-300 font-medium">Scan QR ini menggunakan HP Anda:</p>
             <div id="qrcode" class="bg-white p-4 rounded-xl inline-block my-2"></div>
@@ -33,92 +57,107 @@
             </div>
         </div>
 
+        <!-- Step HP: QR Scanner -->
         <div id="step-hp-scan" class="hidden space-y-4">
             <p class="text-gray-300 font-medium">Arahkan kamera ke QR Code di PC</p>
             <div id="reader" class="overflow-hidden rounded-xl bg-black"></div>
             <p id="scan-status" class="text-xs text-gray-400">Menginisialisasi kamera...</p>
+            <div class="pt-2">
+                <button onclick="showPreview('HP')" class="w-full bg-gray-700/50 hover:bg-gray-600 text-gray-400 font-medium py-2 px-4 rounded-xl transition duration-200 cursor-pointer text-xs">
+                    Buka Mode Pratinjau Tanpa Scan
+                </button>
+            </div>
         </div>
 
+        <!-- PC Dashboard -->
         <div id="step-pc-dashboard" class="hidden space-y-6 text-left">
+            <div id="pc-preview-badge" class="hidden bg-yellow-500/20 text-yellow-500 text-[10px] font-bold py-1 px-3 rounded-full text-center mb-2 border border-yellow-500/30 uppercase tracking-wider">Mode Pratinjau (Koneksi Tidak Aktif)</div>
             <div class="border-b border-gray-700 pb-3 flex justify-between items-center">
                 <h2 class="text-lg font-semibold text-blue-400">Control Panel PC</h2>
-                <span class="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded-full font-mono">Connected</span>
+                <button onclick="goHome()" title="Kembali ke Menu Utama" class="text-gray-500 hover:text-white transition cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </button>
             </div>
             
             <div class="space-y-4">
-                <!-- Screen Mirroring -->
                 <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col justify-between">
                     <div>
-                        <h3 class="font-medium text-white">1. Mirroring Screen</h3>
-                        <p class="text-xs text-gray-400 mb-3">Bagikan layar monitor atau jendela aplikasi PC Anda ke HP.</p>
+                        <h3 class="font-medium text-white">Mirroring Screen & Audio</h3>
+                        <p class="text-xs text-gray-400 mb-3">Bagikan layar dan suara sistem PC Anda ke HP. (Pastikan centang "Share Audio" saat memilih layar).</p>
                     </div>
-                    <button id="btn-screen" onclick="toggleScreenMirroring()" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
+                    <button id="btn-screen" onclick="toggleScreenMirroring()" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg text-sm font-bold transition cursor-pointer">
                         Mulai Share Screen
-                    </button>
-                </div>
-
-                <!-- Mic Mirroring -->
-                <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col justify-between">
-                    <div>
-                        <h3 class="font-medium text-white">2. Mirroring Input Audio (Microphone)</h3>
-                        <div class="mb-3">
-                            <label class="text-[10px] text-gray-500 uppercase font-bold">Pilih Device:</label>
-                            <select id="select-mic" class="w-full bg-gray-800 text-xs border border-gray-600 rounded mt-1 p-1 outline-none focus:border-purple-500"></select>
-                        </div>
-                    </div>
-                    <button id="btn-mic" onclick="toggleAudioMirroring('mic')" class="w-full bg-purple-600 hover:bg-purple-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
-                        Mulai Share Mic
-                    </button>
-                </div>
-
-                <!-- System Audio Mirroring -->
-                <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col justify-between">
-                    <div>
-                        <h3 class="font-medium text-white">3. Mirroring Output Audio (System Sound)</h3>
-                        <p class="text-xs text-gray-400 mb-1 italic">Metode A: Gunakan "Share Audio" saat Share Screen.</p>
-                        <p class="text-xs text-gray-400 mb-2 italic">Metode B: Pilih 'Stereo Mix' / Virtual Cable di bawah:</p>
-                        <div class="mb-3">
-                            <label class="text-[10px] text-gray-500 uppercase font-bold">Pilih Device (Opsional):</label>
-                            <select id="select-system" class="w-full bg-gray-800 text-xs border border-gray-600 rounded mt-1 p-1 outline-none focus:border-pink-500">
-                                <option value="native">Gunakan Native Browser (Prompt)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button id="btn-system-audio" onclick="toggleAudioMirroring('system')" class="w-full bg-pink-600 hover:bg-pink-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
-                        Mulai Share Audio Sistem
                     </button>
                 </div>
             </div>
         </div>
 
+        <!-- HP Receiver -->
         <div id="step-hp-receiver" class="hidden space-y-4">
+            <div id="hp-preview-badge" class="hidden bg-yellow-500/20 text-yellow-500 text-[10px] font-bold py-1 px-3 rounded-full text-center mb-2 border border-yellow-500/30 uppercase tracking-wider">Mode Pratinjau (Koneksi Tidak Aktif)</div>
             <div class="border-b border-gray-700 pb-3 flex justify-between items-center">
                 <h2 class="text-lg font-semibold text-emerald-400">Receiver Screen HP</h2>
-                <span class="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded-full font-mono">Streaming Active</span>
-            </div>
-
-            <!-- Audio Activation Overlay -->
-            <div id="audio-fix-overlay" class="bg-yellow-600/20 border border-yellow-500/50 p-3 rounded-lg flex flex-col items-center space-y-2">
-                <p class="text-xs text-yellow-200">Browser memblokir suara otomatis. Klik tombol di bawah untuk mengaktifkan suara.</p>
-                <button onclick="enableAudioContext()" class="bg-yellow-500 hover:bg-yellow-400 text-black text-xs font-bold py-2 px-4 rounded-full transition cursor-pointer">
-                    🔊 AKTIFKAN SUARA SEKARANG
+                <button onclick="goHome()" title="Kembali ke Menu Utama" class="text-gray-500 hover:text-white transition cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 </button>
             </div>
+
+            <!-- Mode Controls -->
+            <div class="bg-gray-800/50 p-3 rounded-xl border border-gray-700 space-y-3">
+                <div>
+                    <p class="text-[10px] text-gray-500 uppercase font-bold mb-2 tracking-widest text-center">Mode Performa</p>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="setLatencyMode('latency')" id="btn-mode-latency" class="latency-btn flex flex-col items-center justify-center p-2 rounded-lg border bg-blue-600 border-blue-400 transition-all">
+                            <span class="text-[10px] font-bold">LATENCY</span>
+                            <span class="text-[8px] opacity-70">0-100ms</span>
+                        </button>
+                        <button onclick="setLatencyMode('balanced')" id="btn-mode-balanced" class="latency-btn flex flex-col items-center justify-center p-2 rounded-lg border bg-gray-700 border-gray-600 transition-all">
+                            <span class="text-[10px] font-bold">BALANCED</span>
+                            <span class="text-[8px] opacity-70">50-150ms</span>
+                        </button>
+                        <button onclick="setLatencyMode('quality')" id="btn-mode-quality" class="latency-btn flex flex-col items-center justify-center p-2 rounded-lg border bg-gray-700 border-gray-600 transition-all">
+                            <span class="text-[10px] font-bold">QUALITY</span>
+                            <span class="text-[8px] opacity-70">100-500ms</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="pt-2 border-t border-gray-700">
+                    <button id="btn-toggle-audio-only" onclick="toggleAudioOnlyMode()" class="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 rounded-lg transition flex items-center justify-center gap-2">
+                        <span id="audio-only-icon">📻</span> 
+                        <span id="audio-only-text">Aktifkan Mode Audio Saja</span>
+                    </button>
+                </div>
+            </div>
             
-            <div class="relative group bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-gray-700">
+            <div id="video-container" class="relative group bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-gray-700">
                 <video id="remote-video" autoplay playsinline class="w-full h-full object-contain cursor-pointer" onclick="toggleFullScreen()"></video>
-                <p id="video-placeholder" class="absolute text-gray-500 text-sm pointer-events-none">Menunggu kiriman layar/audio dari PC...</p>
-                <button onclick="toggleFullScreen()" class="absolute bottom-2 right-2 bg-black/50 hover:bg-black/80 text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                <p id="video-placeholder" class="absolute text-gray-500 text-sm pointer-events-none text-center px-4">Menunggu kiriman layar dari PC...</p>
+                
+                <!-- Audio Only UI overlay -->
+                <div id="audio-only-ui" class="hidden absolute inset-0 bg-gray-900 flex flex-col items-center justify-center p-6 text-center">
+                    <div class="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 animate-pulse">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    </div>
+                    <h3 class="text-emerald-400 font-bold">Mode Audio Aktif</h3>
+                    <p class="text-xs text-gray-500 mt-1">Video dimatikan untuk hemat data</p>
+                    
+                    <div class="mt-6 flex items-center gap-4">
+                        <button onclick="controlAudioPlayback('play')" class="p-3 bg-gray-700 hover:bg-gray-600 rounded-full transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <button onclick="controlAudioPlayback('pause')" class="p-3 bg-gray-700 hover:bg-gray-600 rounded-full transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <button id="fullscreen-btn" onclick="toggleFullScreen()" class="absolute bottom-2 right-2 bg-black/50 hover:bg-black/80 text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
                 </button>
             </div>
-
-            <div class="flex space-x-2">
-                <audio id="remote-audio-mic" autoplay playsinline></audio>
-                <audio id="remote-audio-system" autoplay playsinline></audio>
-            </div>
             
-            <p class="text-xs text-gray-400 italic text-left">💡 Tips: Jika suara pecah, pastikan koneksi internet stabil. Gunakan tombol 'Aktifkan Suara' jika HP tidak mengeluarkan bunyi.</p>
+            <p class="text-xs text-gray-400 italic text-left">💡 Tips: Klik video untuk mode layar penuh. Jika suara tidak terdengar, pastikan volume HP aktif dan berinteraksi dengan layar.</p>
         </div>
 
     </div>
@@ -129,18 +168,10 @@
         let connection = null;
         let myRole = '';
         let html5QrcodeScanner = null;
-
-        // Track active streams and calls
-        let activeStreams = {
-            screen: null,
-            mic: null,
-            system: null
-        };
-        let activeCalls = {
-            screen: null,
-            mic: null,
-            system: null
-        };
+        let activeScreenStream = null;
+        let activeCall = null;
+        let currentLatencyHint = 0; // Default: Latency mode (0 seconds)
+        let isAudioOnlyMode = false;
 
         // Element Selectors
         const elRole = document.getElementById('step-role');
@@ -148,11 +179,15 @@
         const elHpScan = document.getElementById('step-hp-scan');
         const elPcDashboard = document.getElementById('step-pc-dashboard');
         const elHpReceiver = document.getElementById('step-hp-receiver');
+        const elBrowse = document.getElementById('step-browse');
+        const pcBadge = document.getElementById('pc-preview-badge');
+        const hpBadge = document.getElementById('hp-preview-badge');
+        const elAudioOnlyUI = document.getElementById('audio-only-ui');
+        const videoEl = document.getElementById('remote-video');
 
-        // Fungsi Memilih Peran
         function initRole(role) {
             myRole = role;
-            elRole.classList.add('hidden');
+            hideAllSteps();
 
             if (role === 'PC') {
                 elPcQr.classList.remove('hidden');
@@ -163,17 +198,51 @@
             }
         }
 
-        // ==========================================
-        // CONFIGURASI UNTUK PC (SENDER)
-        // ==========================================
+        function openBrowseChoice() {
+            hideAllSteps();
+            elBrowse.classList.remove('hidden');
+        }
+
+        function showPreview(role) {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(() => {});
+            }
+            hideAllSteps();
+            if (role === 'PC') {
+                elPcDashboard.classList.remove('hidden');
+                pcBadge.classList.remove('hidden');
+            } else {
+                elHpReceiver.classList.remove('hidden');
+                hpBadge.classList.remove('hidden');
+            }
+        }
+
+        function goHome() {
+            if (activeScreenStream) {
+                activeScreenStream.getTracks().forEach(t => t.stop());
+            }
+            
+            hideAllSteps();
+            elRole.classList.remove('hidden');
+            pcBadge.classList.add('hidden');
+            hpBadge.classList.add('hidden');
+            
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(() => {});
+            }
+        }
+
+        function hideAllSteps() {
+            [elRole, elPcQr, elHpScan, elPcDashboard, elHpReceiver, elBrowse].forEach(el => el.classList.add('hidden'));
+        }
+
+        // --- SENDER (PC) LOGIC ---
         function setupPC() {
-            // Membuat ID unik acak untuk PC
             peerId = 'mirror-' + Math.random().toString(36).substr(2, 9);
             peer = new Peer(peerId);
 
             peer.on('open', (id) => {
                 document.querySelectorAll('.id-display').forEach(el => el.innerText = "ID: " + id);
-                // Generate QR Code berisi ID PC tersebut
                 new QRCode(document.getElementById("qrcode"), {
                     text: id,
                     width: 200,
@@ -184,79 +253,64 @@
                 });
             });
 
-            // Mendengarkan jika HP tersambung melalui Data Connection
             peer.on('connection', (conn) => {
                 connection = conn;
-                handleConnection();
+                elPcQr.classList.add('hidden');
+                elPcDashboard.classList.remove('hidden');
+
+                // Mendengarkan instruksi dari HP
+                connection.on('data', (data) => {
+                    if (data.type === 'TOGGLE_VIDEO') {
+                        if (activeScreenStream) {
+                            const videoTrack = activeScreenStream.getVideoTracks()[0];
+                            if (videoTrack) {
+                                videoTrack.enabled = data.enabled;
+                                console.log("Video track " + (data.enabled ? "enabled" : "disabled") + " by receiver");
+                            }
+                        }
+                    }
+                });
             });
         }
 
-        async function handleConnection() {
-            // Jika sukses terhubung, pindah ke kontrol dashboard PC
-            elPcQr.classList.add('hidden');
-            elPcDashboard.classList.remove('hidden');
-            
-            // Minta izin mic sebentar untuk mendapatkan label device
-            try {
-                const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                tempStream.getTracks().forEach(t => t.stop());
-                await refreshDeviceList();
-            } catch (e) {
-                console.error("Izin mic ditolak, label perangkat mungkin tidak muncul.");
-            }
-        }
-
-        async function refreshDeviceList() {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const micSelect = document.getElementById('select-mic');
-            const sysSelect = document.getElementById('select-system');
-            
-            micSelect.innerHTML = '';
-            // Reset system select but keep native option
-            sysSelect.innerHTML = '<option value="native">Gunakan Native Browser (Prompt)</option>';
-
-            devices.forEach(device => {
-                if (device.kind === 'audioinput') {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.text = device.label || `Device ${micSelect.length + 1}`;
-                    
-                    micSelect.appendChild(option.cloneNode(true));
-                    sysSelect.appendChild(option.cloneNode(true));
-                }
-            });
-        }
-
-        // 1. Fungsi Mirroring Layar PC (Toggle)
         async function toggleScreenMirroring() {
+            if (!connection && !activeScreenStream) {
+                alert("Mode Pratinjau: Anda harus terhubung ke HP untuk melakukan streaming layar.");
+                return;
+            }
             const btn = document.getElementById('btn-screen');
             
-            if (activeStreams.screen) {
-                // STOP
-                activeStreams.screen.getTracks().forEach(track => track.stop());
-                if (activeCalls.screen) activeCalls.screen.close();
-                activeStreams.screen = null;
-                activeCalls.screen = null;
+            if (activeScreenStream) {
+                activeScreenStream.getTracks().forEach(track => track.stop());
+                if (activeCall) activeCall.close();
+                activeScreenStream = null;
+                activeCall = null;
                 
                 btn.innerText = "Mulai Share Screen";
                 btn.classList.replace('bg-red-600', 'bg-blue-600');
                 btn.classList.replace('hover:bg-red-500', 'hover:bg-blue-500');
             } else {
-                // START
                 try {
-                    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+                    // Mengaktifkan audio: true akan memicu opsi "Share tab audio" atau "System audio" di browser
+                    const stream = await navigator.mediaDevices.getDisplayMedia({ 
+                        video: true, 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        } 
+                    });
                     const call = peer.call(connection.peer, stream);
                     
-                    activeStreams.screen = stream;
-                    activeCalls.screen = call;
+                    activeScreenStream = stream;
+                    activeCall = call;
                     
                     btn.innerText = "🛑 Berhenti Share Screen";
                     btn.classList.replace('bg-blue-600', 'bg-red-600');
                     btn.classList.replace('hover:bg-blue-500', 'hover:bg-red-500');
 
-                    // Detect when user clicks "Stop Sharing" from browser toolbar
                     stream.getVideoTracks()[0].onended = () => {
-                        if (activeStreams.screen) toggleScreenMirroring();
+                        if (activeScreenStream) toggleScreenMirroring();
                     };
                 } catch (err) {
                     console.error("Gagal share screen:", err);
@@ -264,105 +318,35 @@
             }
         }
 
-        // 2 & 3. Fungsi Mirroring Audio (Toggle)
-        async function toggleAudioMirroring(type) {
-            const btnId = type === 'mic' ? 'btn-mic' : 'btn-system-audio';
-            const selectId = type === 'mic' ? 'select-mic' : 'select-system';
-            const btn = document.getElementById(btnId);
-            const selectEl = document.getElementById(selectId);
-            const defaultBg = type === 'mic' ? 'bg-purple-600' : 'bg-pink-600';
-            const hoverBg = type === 'mic' ? 'hover:bg-purple-500' : 'hover:bg-pink-500';
+        // --- RECEIVER (HP) LOGIC ---
+        function setLatencyMode(mode) {
+            const btns = document.querySelectorAll('.latency-btn');
+            btns.forEach(b => {
+                b.classList.replace('bg-blue-600', 'bg-gray-700');
+                b.classList.replace('border-blue-400', 'border-gray-600');
+            });
 
-            if (activeStreams[type]) {
-                // STOP
-                activeStreams[type].getTracks().forEach(track => track.stop());
-                if (activeCalls[type]) activeCalls[type].close();
-                activeStreams[type] = null;
-                activeCalls[type] = null;
-                
-                btn.innerText = type === 'mic' ? "Mulai Share Mic" : "Mulai Share Audio Sistem";
-                btn.classList.replace('bg-red-600', defaultBg);
-                btn.classList.replace('hover:bg-red-500', hoverBg);
-                selectEl.disabled = false;
-            } else {
-                // START
-                try {
-                    let stream;
-                    const selectedDeviceId = selectEl.value;
+            const activeBtn = document.getElementById('btn-mode-' + mode);
+            activeBtn.classList.replace('bg-gray-700', 'bg-blue-600');
+            activeBtn.classList.replace('border-gray-600', 'border-blue-400');
 
-                    if (type === 'mic') {
-                        stream = await navigator.mediaDevices.getUserMedia({ 
-                            video: false, 
-                            audio: { 
-                                deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
-                                echoCancellation: true,
-                                noiseSuppression: true
-                            } 
-                        });
-                    } else {
-                        if (selectedDeviceId === 'native') {
-                            // Penting: Sertakan video track minimal agar metadata stream terkirim dengan benar di beberapa browser
-                            stream = await navigator.mediaDevices.getDisplayMedia({ 
-                                video: { width: 1, height: 1, frameRate: 1 }, 
-                                audio: {
-                                    echoCancellation: false,
-                                    noiseSuppression: false,
-                                    autoGainControl: false
-                                } 
-                            });
-                            
-                            if (stream.getAudioTracks().length === 0) {
-                                stream.getTracks().forEach(t => t.stop());
-                                alert("Peringatan: Anda harus mencentang 'Share Audio' pada jendela pop-up browser agar suara sistem terkirim.");
-                                return;
-                            }
-                        } else {
-                            stream = await navigator.mediaDevices.getUserMedia({ 
-                                video: false, 
-                                audio: { 
-                                    deviceId: { exact: selectedDeviceId },
-                                    echoCancellation: false,
-                                    noiseSuppression: false
-                                } 
-                            });
-                        }
-                    }
+            // playoutDelayHint dalam detik
+            if (mode === 'latency') currentLatencyHint = 0;
+            else if (mode === 'balanced') currentLatencyHint = 0.1; // ~100ms
+            else if (mode === 'quality') currentLatencyHint = 0.4; // ~400ms
 
-                    // Tambahkan metadata untuk mengidentifikasi jenis stream
-                    const call = peer.call(connection.peer, stream, { metadata: { type: type } });
-                    selectEl.disabled = true;
-                    activeStreams[type] = stream;
-                    activeCalls[type] = call;
-
-                    btn.innerText = "🛑 Berhenti Audio";
-                    btn.classList.replace(defaultBg, 'bg-red-600');
-                    btn.classList.replace(hoverBg, 'hover:bg-red-500');
-                } catch (err) {
-                    console.error("Gagal share audio:", err);
-                    alert("Gagal membagikan audio.");
-                }
-            }
+            applyLatencyToActiveCall();
         }
 
-
-        // ==========================================
-        // CONFIGURASI UNTUK HP (RECEIVER)
-        // ==========================================
-        
-        // Fungsi untuk memaksa browser mengizinkan audio (User Gesture)
-        function enableAudioContext() {
-            const videoEl = document.getElementById('remote-video');
-            const audioMicEl = document.getElementById('remote-audio-mic');
-            const audioSysEl = document.getElementById('remote-audio-system');
-            
-            // Play empty sounds / resume context
-            [videoEl, audioMicEl, audioSysEl].forEach(el => {
-                if (el.srcObject) {
-                    el.play().catch(e => console.log("Audio play deferred", e));
-                }
-            });
-            
-            document.getElementById('audio-fix-overlay').classList.add('hidden');
+        function applyLatencyToActiveCall() {
+            if (activeCall && activeCall.peerConnection) {
+                activeCall.peerConnection.getReceivers().forEach(receiver => {
+                    if ('playoutDelayHint' in receiver) {
+                        receiver.playoutDelayHint = currentLatencyHint;
+                        console.log("Latency hint applied:", currentLatencyHint);
+                    }
+                });
+            }
         }
 
         function setupHP() {
@@ -374,77 +358,84 @@
             });
 
             peer.on('call', (call) => {
+                activeCall = call; // Simpan call secara global untuk HP
                 call.answer();
-                
                 call.on('stream', (remoteStream) => {
-                    const streamType = call.metadata ? call.metadata.type : 'unknown';
+                    const videoEl = document.getElementById('remote-video');
+                    videoEl.srcObject = remoteStream;
+                    document.getElementById('video-placeholder').classList.add('hidden');
                     
-                    if (remoteStream.getVideoTracks().length > 0 && streamType !== 'system') {
-                        // Jika stream video (Screen Mirroring)
-                        const videoEl = document.getElementById('remote-video');
-                        videoEl.srcObject = remoteStream;
-                        document.getElementById('video-placeholder').classList.add('hidden');
-                        
-                        remoteStream.getVideoTracks()[0].onended = () => {
-                            videoEl.srcObject = null;
-                            document.getElementById('video-placeholder').classList.remove('hidden');
-                        };
-                    } else {
-                        // Jika stream audio saja atau system audio dengan dummy video
-                        const targetElId = (streamType === 'mic') ? 'remote-audio-mic' : 'remote-audio-system';
-                        const audioEl = document.getElementById(targetElId);
-                        audioEl.srcObject = remoteStream;
-                        
-                        // Khusus untuk system audio yang membawa track video 1x1, sembunyikan videonya
-                        if (streamType === 'system') {
-                            audioEl.volume = 1.0;
-                        }
-                    }
+                    // Terapkan setting latency saat stream dimulai
+                    applyLatencyToActiveCall();
+                    
+                    remoteStream.getVideoTracks()[0].onended = () => {
+                        videoEl.srcObject = null;
+                        document.getElementById('video-placeholder').classList.remove('hidden');
+                    };
                 });
             });
         }
 
-        // Fungsi Membuka Kamera HP & Scan QR Code
         function startScanner() {
             html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
             html5QrcodeScanner.render(onScanSuccess, onScanFailure);
         }
 
-        function onScanSuccess(decodedText, decodedResult) {
-            // decodedText berisi ID dari PC
-            html5QrcodeScanner.clear(); // Matikan scanner
+        function onScanSuccess(decodedText) {
+            html5QrcodeScanner.clear();
             document.getElementById('step-hp-scan').classList.add('hidden');
             elHpReceiver.classList.remove('hidden');
-
-            // Buka koneksi data ke PC
             connection = peer.connect(decodedText);
+        }
+
+        function onScanFailure(error) {}
+
+        function toggleAudioOnlyMode() {
+            isAudioOnlyMode = !isAudioOnlyMode;
             
-            connection.on('open', () => {
-                console.log("Terhubung ke PC:", decodedText);
-            });
+            const btnText = document.getElementById('audio-only-text');
+            const btnIcon = document.getElementById('audio-only-icon');
+            const fullScreenBtn = document.getElementById('fullscreen-btn');
+
+            if (isAudioOnlyMode) {
+                elAudioOnlyUI.classList.remove('hidden');
+                btnText.innerText = "Kembali ke Mode Video";
+                btnIcon.innerText = "📺";
+                fullScreenBtn.classList.add('hidden');
+            } else {
+                elAudioOnlyUI.classList.add('hidden');
+                btnText.innerText = "Aktifkan Mode Audio Saja";
+                btnIcon.innerText = "📻";
+                fullScreenBtn.classList.remove('hidden');
+            }
+
+            // Kirim sinyal ke PC untuk mematikan/menghidupkan track video
+            if (connection && connection.open) {
+                connection.send({
+                    type: 'TOGGLE_VIDEO',
+                    enabled: !isAudioOnlyMode
+                });
+            }
         }
 
-        function onScanFailure(error) {
-            // Scan gagal berulang kali sewaktu mencari QR (diabaikan agar terus mencari)
+        function controlAudioPlayback(action) {
+            if (!videoEl) return;
+            if (action === 'play') {
+                videoEl.play();
+            } else if (action === 'pause') {
+                videoEl.pause();
+            }
         }
 
-        // Fungsi Fullscreen untuk Video
         function toggleFullScreen() {
             const videoEl = document.getElementById('remote-video');
-            if (!videoEl.srcObject) return; // Abaikan jika tidak ada stream aktif
+            if (!videoEl.srcObject) return;
 
             if (!document.fullscreenElement) {
-                if (videoEl.requestFullscreen) {
-                    videoEl.requestFullscreen();
-                } else if (videoEl.webkitRequestFullscreen) { // Kompatibilitas Safari/iOS
-                    videoEl.webkitRequestFullscreen();
-                } else if (videoEl.msRequestFullscreen) { // Kompatibilitas IE
-                    videoEl.msRequestFullscreen();
-                }
+                if (videoEl.requestFullscreen) videoEl.requestFullscreen();
+                else if (videoEl.webkitRequestFullscreen) videoEl.webkitRequestFullscreen();
             } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                }
+                if (document.exitFullscreen) document.exitFullscreen();
             }
         }
     </script>
