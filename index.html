@@ -96,6 +96,14 @@
                 <h2 class="text-lg font-semibold text-emerald-400">Receiver Screen HP</h2>
                 <span class="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded-full font-mono">Streaming Active</span>
             </div>
+
+            <!-- Audio Activation Overlay -->
+            <div id="audio-fix-overlay" class="bg-yellow-600/20 border border-yellow-500/50 p-3 rounded-lg flex flex-col items-center space-y-2">
+                <p class="text-xs text-yellow-200">Browser memblokir suara otomatis. Klik tombol di bawah untuk mengaktifkan suara.</p>
+                <button onclick="enableAudioContext()" class="bg-yellow-500 hover:bg-yellow-400 text-black text-xs font-bold py-2 px-4 rounded-full transition cursor-pointer">
+                    🔊 AKTIFKAN SUARA SEKARANG
+                </button>
+            </div>
             
             <div class="relative group bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-gray-700">
                 <video id="remote-video" autoplay playsinline class="w-full h-full object-contain cursor-pointer" onclick="toggleFullScreen()"></video>
@@ -105,9 +113,12 @@
                 </button>
             </div>
 
-            <audio id="remote-audio" autoplay playsinline></audio>
+            <div class="flex space-x-2">
+                <audio id="remote-audio-mic" autoplay playsinline></audio>
+                <audio id="remote-audio-system" autoplay playsinline></audio>
+            </div>
             
-            <p class="text-xs text-gray-400 italic">💡 Pastikan volume HP Anda aktif. Jika audio tidak keluar, ketuk layar HP sekali untuk memicu izin autoplay browser.</p>
+            <p class="text-xs text-gray-400 italic text-left">💡 Tips: Jika suara pecah, pastikan koneksi internet stabil. Gunakan tombol 'Aktifkan Suara' jika HP tidak mengeluarkan bunyi.</p>
         </div>
 
     </div>
@@ -282,23 +293,43 @@
                     if (type === 'mic') {
                         stream = await navigator.mediaDevices.getUserMedia({ 
                             video: false, 
-                            audio: { deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined } 
+                            audio: { 
+                                deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+                                echoCancellation: true,
+                                noiseSuppression: true
+                            } 
                         });
                     } else {
-                        // Jika milih 'native', pakai getDisplayMedia (standar)
-                        // Jika milih device ID tertentu (misal Stereo Mix), pakai getUserMedia
                         if (selectedDeviceId === 'native') {
-                            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                            stream.getVideoTracks().forEach(track => track.stop());
+                            // Penting: Sertakan video track minimal agar metadata stream terkirim dengan benar di beberapa browser
+                            stream = await navigator.mediaDevices.getDisplayMedia({ 
+                                video: { width: 1, height: 1, frameRate: 1 }, 
+                                audio: {
+                                    echoCancellation: false,
+                                    noiseSuppression: false,
+                                    autoGainControl: false
+                                } 
+                            });
+                            
+                            if (stream.getAudioTracks().length === 0) {
+                                stream.getTracks().forEach(t => t.stop());
+                                alert("Peringatan: Anda harus mencentang 'Share Audio' pada jendela pop-up browser agar suara sistem terkirim.");
+                                return;
+                            }
                         } else {
                             stream = await navigator.mediaDevices.getUserMedia({ 
                                 video: false, 
-                                audio: { deviceId: { exact: selectedDeviceId } } 
+                                audio: { 
+                                    deviceId: { exact: selectedDeviceId },
+                                    echoCancellation: false,
+                                    noiseSuppression: false
+                                } 
                             });
                         }
                     }
 
-                    const call = peer.call(connection.peer, stream);
+                    // Tambahkan metadata untuk mengidentifikasi jenis stream
+                    const call = peer.call(connection.peer, stream, { metadata: { type: type } });
                     selectEl.disabled = true;
                     activeStreams[type] = stream;
                     activeCalls[type] = call;
@@ -317,6 +348,23 @@
         // ==========================================
         // CONFIGURASI UNTUK HP (RECEIVER)
         // ==========================================
+        
+        // Fungsi untuk memaksa browser mengizinkan audio (User Gesture)
+        function enableAudioContext() {
+            const videoEl = document.getElementById('remote-video');
+            const audioMicEl = document.getElementById('remote-audio-mic');
+            const audioSysEl = document.getElementById('remote-audio-system');
+            
+            // Play empty sounds / resume context
+            [videoEl, audioMicEl, audioSysEl].forEach(el => {
+                if (el.srcObject) {
+                    el.play().catch(e => console.log("Audio play deferred", e));
+                }
+            });
+            
+            document.getElementById('audio-fix-overlay').classList.add('hidden');
+        }
+
         function setupHP() {
             peer = new Peer();
 
@@ -325,33 +373,33 @@
                 startScanner();
             });
 
-            // Mendengarkan kiriman Media Stream (Video/Audio) dari PC
             peer.on('call', (call) => {
                 call.answer();
                 
                 call.on('stream', (remoteStream) => {
-                    document.getElementById('video-placeholder').classList.add('hidden');
+                    const streamType = call.metadata ? call.metadata.type : 'unknown';
                     
-                    if (remoteStream.getVideoTracks().length > 0) {
+                    if (remoteStream.getVideoTracks().length > 0 && streamType !== 'system') {
+                        // Jika stream video (Screen Mirroring)
                         const videoEl = document.getElementById('remote-video');
                         videoEl.srcObject = remoteStream;
+                        document.getElementById('video-placeholder').classList.add('hidden');
                         
                         remoteStream.getVideoTracks()[0].onended = () => {
                             videoEl.srcObject = null;
                             document.getElementById('video-placeholder').classList.remove('hidden');
                         };
-                    } else if (remoteStream.getAudioTracks().length > 0) {
-                        const audioEl = document.getElementById('remote-audio');
+                    } else {
+                        // Jika stream audio saja atau system audio dengan dummy video
+                        const targetElId = (streamType === 'mic') ? 'remote-audio-mic' : 'remote-audio-system';
+                        const audioEl = document.getElementById(targetElId);
                         audioEl.srcObject = remoteStream;
-
-                        remoteStream.getAudioTracks()[0].onended = () => {
-                            audioEl.srcObject = null;
-                        };
+                        
+                        // Khusus untuk system audio yang membawa track video 1x1, sembunyikan videonya
+                        if (streamType === 'system') {
+                            audioEl.volume = 1.0;
+                        }
                     }
-                });
-
-                call.on('close', () => {
-                    // Opsional: Reset jika call ditutup paksa
                 });
             });
         }
