@@ -57,6 +57,23 @@ const Player = {
         return this.video.muted;
     },
 
+    toggleFullScreen(elementId) {
+        const elem = document.getElementById(elementId);
+        if (!document.fullscreenElement) {
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) { /* Safari */
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) { /* IE11 */
+                elem.msRequestFullscreen();
+            }
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    },
+
     /**
      * Mengatur playoutDelayHint & jitterBufferTarget pada RTCRtpReceiver.
      * Memastikan audio dan video mendapatkan nilai delay yang identik untuk mencegah drift/desync.
@@ -67,11 +84,29 @@ const Player = {
             return;
         }
         
+        // Memaksa browser untuk memprioritaskan konsistensi frame
         const minSec = minMs / 1000;
-        console.log(`[Buffer] Mencoba menerapkan delay ${minMs}ms ke semua track...`);
+        console.log(`[Buffer] Optimasi sinkronisasi: ${minMs}ms`);
 
         try {
             const receivers = this.pc.getReceivers();
+            if (receivers.length === 0) return;
+
+            receivers.forEach(receiver => {
+                // Gunakan jitterBufferTarget untuk mencegah audio pecah/crackling
+                if ('jitterBufferTarget' in receiver) {
+                    receiver.jitterBufferTarget = minMs;
+                }
+                
+                if ('playoutDelayHint' in receiver) {
+                    receiver.playoutDelayHint = minSec;
+                }
+
+                // Pengaturan tambahan untuk memastikan video tidak stuttering
+                if (receiver.track && receiver.track.kind === 'video') {
+                    receiver.playoutDelayHint = Math.max(minSec, 0.05); // Minimal 50ms untuk video agar smooth
+                }
+            });
             if (receivers.length === 0) {
                 console.warn("[Buffer] Tidak ada receiver ditemukan.");
                 return;
