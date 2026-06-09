@@ -3,258 +3,260 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SocketKu - Hubungkan Perangkat</title>
-    <link rel="stylesheet" href="style.css">
+    <title>WebRTC Screen & Audio Mirroring</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
-<body>
-    <div class="container">
-        <nav>
-            <div class="logo">Socket<span>Ku</span></div>
-            <div id="status-indicator" class="status offline">Menunggu...</div>
-        </nav>
+<body class="bg-gray-900 text-white font-sans min-h-screen flex flex-col items-center justify-center p-4">
 
-        <!-- ===== CONNECTION SCREEN ===== -->
-        <main id="connection-screen">
-            <div class="card main-card">
-                <h1>Hubungkan Perangkat</h1>
-                <p>Scan QR Code atau buka link di perangkat lain.</p>
-                <div class="qr-container"><div id="qrcode"></div></div>
-                <div class="info-box">
-                    <p id="peer-id-display">Menginisialisasi ID...</p>
-                </div>
-                <p style="font-size:0.8rem;margin-top:-20px;">ID Anda: <span id="my-id">...</span></p>
+    <div class="w-full max-w-md bg-gray-800 rounded-2xl shadow-xl p-6 text-center border border-gray-700">
+        <h1 class="text-2xl font-bold mb-6 text-blue-400">⚡ MirrorCast WebRTC</h1>
+
+        <div id="step-role" class="space-y-4">
+            <p class="text-gray-400 mb-4">Pilih peran perangkat ini:</p>
+            <button onclick="initRole('PC')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 cursor-pointer">
+                💻 Saya adalah PC (Sender)
+            </button>
+            <button onclick="initRole('HP')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 cursor-pointer">
+                📱 Saya adalah HP (Receiver)
+            </button>
+        </div>
+
+        <div id="step-pc-qr" class="hidden space-y-4">
+            <p class="text-gray-300 font-medium">Scan QR ini menggunakan HP Anda:</p>
+            <div id="qrcode" class="bg-white p-4 rounded-xl inline-block my-2"></div>
+            <p class="text-xs text-gray-500 id-display">Menghubungkan ke server signaling...</p>
+            <div class="animate-pulse flex justify-center items-center space-x-2 text-yellow-500">
+                <span>Menunggu koneksi dari HP...</span>
             </div>
-        </main>
+        </div>
 
-        <!-- ===== DASHBOARD SCREEN ===== -->
-        <main id="dashboard-screen" class="hidden">
-            <div class="card">
-                <div class="dashboard-header">
+        <div id="step-hp-scan" class="hidden space-y-4">
+            <p class="text-gray-300 font-medium">Arahkan kamera ke QR Code di PC</p>
+            <div id="reader" class="overflow-hidden rounded-xl bg-black"></div>
+            <p id="scan-status" class="text-xs text-gray-400">Menginisialisasi kamera...</p>
+        </div>
+
+        <div id="step-pc-dashboard" class="hidden space-y-6 text-left">
+            <div class="border-b border-gray-700 pb-3 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-blue-400">Control Panel PC</h2>
+                <span class="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded-full font-mono">Connected</span>
+            </div>
+            
+            <div class="space-y-4">
+                <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col justify-between">
                     <div>
-                        <h1>Dashboard</h1>
-                        <p style="margin:0;">Perangkat terhubung ✅</p>
+                        <h3 class="font-medium text-white">1. Mirroring Screen</h3>
+                        <p class="text-xs text-gray-400 mb-3">Bagikan layar monitor atau jendela aplikasi PC Anda ke HP.</p>
                     </div>
-                    <div class="device-badge">
-                        <span class="badge-icon">📡</span>
-                        <span id="remote-id" class="badge-id">None</span>
-                    </div>
-                </div>
-
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <span class="label">Status</span>
-                        <span class="value green">Aktif</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="label">Sinyal</span>
-                        <span class="value" id="signal-strength">P2P Langsung</span>
-                    </div>
-                </div>
-
-                <div class="section-title">🛠️ Pilih Fitur</div>
-                <div class="tools-grid">
-                    <!-- Share File -->
-                    <div id="btn-share-file" class="tool-card" onclick="openRoleSelection('file')">
-                        <div class="tool-icon">📁</div>
-                        <h3>Share File</h3>
-                        <p>Kirim dokumen & media</p>
-                        <div class="tool-badge">ShareIt Style</div>
-                    </div>
-                    <!-- Screen Mirror -->
-                    <div id="btn-mirroring" class="tool-card" onclick="openRoleSelection('mirror')">
-                        <div class="tool-icon">📺</div>
-                        <h3>Screen Mirror</h3>
-                        <p>Bagikan / lihat layar</p>
-                        <div class="tool-badge">Live Stream</div>
-                    </div>
-                    <!-- Coming Soon -->
-                    <div class="tool-card disabled">
-                        <div class="tool-icon">⏳</div>
-                        <h3>Coming Soon</h3>
-                        <p>Fitur baru lainnya</p>
-                    </div>
-                </div>
-
-                <div id="conflict-warn" class="warning-box hidden">
-                    ⚠️ <span id="conflict-msg">Menunggu kesiapan perangkat lawan...</span>
-                </div>
-
-                <button id="sim-disconnect" class="btn-outline">🔌 Putuskan Koneksi</button>
-            </div>
-        </main>
-
-        <!-- ===== ROLE SELECTION OVERLAY ===== -->
-        <div id="role-overlay" class="modal hidden">
-            <div class="modal-content role-selection">
-                <div class="modal-header">
-                    <h2 id="role-title">Pilih Peran</h2>
-                    <button id="close-role" class="btn-close">&times;</button>
-                </div>
-                <p id="role-desc" style="margin-bottom:10px;">Tentukan peran Anda dalam sesi ini.</p>
-                <div class="role-options">
-                    <button id="role-sender" class="role-btn sender-btn">
-                        <span class="role-icon">📤</span>
-                        <span class="role-name">PENGIRIM</span>
-                        <span class="role-hint" id="sender-hint">Kirim / Bagikan</span>
+                    <button id="btn-screen" onclick="startScreenMirroring()" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
+                        Mulai Share Screen
                     </button>
-                    <button id="role-receiver" class="role-btn receiver-btn">
-                        <span class="role-icon">📥</span>
-                        <span class="role-name">PENERIMA</span>
-                        <span class="role-hint" id="receiver-hint">Terima / Tampilkan</span>
+                </div>
+
+                <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-medium text-white">2. Mirroring Input Audio (Microphone)</h3>
+                        <p class="text-xs text-gray-400 mb-3">Kirim suara dari Microphone PC ke HP.</p>
+                    </div>
+                    <button id="btn-mic" onclick="startAudioMirroring('mic')" class="w-full bg-purple-600 hover:bg-purple-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
+                        Mulai Share Mic
+                    </button>
+                </div>
+
+                <div class="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-medium text-white">3. Mirroring Output Audio (System Sound)</h3>
+                        <p class="text-xs text-gray-400 mb-3">Kirim suara internal PC (wajib centang "Share audio" saat memilih tab/layar).</p>
+                    </div>
+                    <button id="btn-system-audio" onclick="startAudioMirroring('system')" class="w-full bg-pink-600 hover:bg-pink-500 py-2 rounded-lg text-sm font-semibold transition cursor-pointer">
+                        Mulai Share Audio Sistem
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- ===== SHARE FILE OVERLAY ===== -->
-        <div id="sharefile-overlay" class="modal hidden">
-            <div class="modal-content sharefile-container">
-                <div class="modal-header">
-                    <h2 id="sf-title">Share File</h2>
-                    <div class="header-actions">
-                        <span id="sf-role-badge" class="role-indicator">📤 Pengirim</span>
-                        <button id="close-sharefile" class="btn-close">&times;</button>
-                    </div>
-                </div>
-
-                <!-- SENDER UI -->
-                <div id="sf-sender-ui" class="hidden">
-                    <div class="shareit-radar">
-                        <div class="radar-ring r1"></div>
-                        <div class="radar-ring r2"></div>
-                        <div class="radar-ring r3"></div>
-                        <div class="radar-center" id="sf-drop-zone" onclick="document.getElementById('file-input').click()">
-                            <div class="radar-icon">📁</div>
-                            <p>Ketuk atau<br>Drop File</p>
-                        </div>
-                    </div>
-                    <input type="file" id="file-input" class="hidden" multiple>
-
-                    <!-- File Queue -->
-                    <div id="file-queue" class="file-queue hidden">
-                        <div class="queue-header">
-                            <span>File Dipilih</span>
-                            <button id="btn-send-files" class="btn-send">Kirim Semua 🚀</button>
-                        </div>
-                        <div id="file-list" class="file-list"></div>
-                    </div>
-                </div>
-
-                <!-- RECEIVER UI -->
-                <div id="sf-receiver-ui" class="hidden">
-                    <div class="receiver-waiting">
-                        <div class="pulse-icon">📡</div>
-                        <h3>Siap Menerima</h3>
-                        <p>File yang dikirim perangkat lain akan otomatis diunduh.</p>
-                        <div id="received-files-list" class="received-list"></div>
-                    </div>
-                </div>
+        <div id="step-hp-receiver" class="hidden space-y-4">
+            <div class="border-b border-gray-700 pb-3 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-emerald-400">Receiver Screen HP</h2>
+                <span class="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded-full font-mono">Streaming Active</span>
             </div>
+            
+            <div class="relative bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-gray-700">
+                <video id="remote-video" autoplay playsinline class="w-full h-full object-contain"></video>
+                <p id="video-placeholder" class="absolute text-gray-500 text-sm">Menunggu kiriman layar/audio dari PC...</p>
+            </div>
+
+            <audio id="remote-audio" autoplay playsinline></audio>
+            
+            <p class="text-xs text-gray-400 italic">💡 Pastikan volume HP Anda aktif. Jika audio tidak keluar, ketuk layar HP sekali untuk memicu izin autoplay browser.</p>
         </div>
 
-        <!-- ===== SCREEN MIRRORING OVERLAY ===== -->
-        <div id="mirror-overlay" class="modal hidden">
-            <div class="modal-content mirror-container" id="mirror-modal-content">
-                <div class="modal-header">
-                    <div class="mirror-title-group">
-                        <h2 id="mirror-status-text">Screen Mirroring</h2>
-                        <span id="mirror-role-badge" class="role-indicator">📺 Penerima</span>
-                    </div>
-                    <div class="header-actions">
-                        <!-- PC Options Toggle (only on receiver) -->
-                        <button id="btn-pc-options" class="btn-icon-text hidden" title="Opsi PC">⚙️ Opsi PC</button>
-                        <button id="btn-fullscreen" class="btn-icon" title="Fullscreen">⛶</button>
-                        <button id="close-mirror" class="btn-close">&times;</button>
-                    </div>
-                </div>
-
-                <!-- Mirror View Area -->
-                <div class="mirror-view" id="video-wrapper">
-                    <video id="remote-video" autoplay playsinline></video>
-                    <video id="local-preview" autoplay playsinline muted class="hidden"></video>
-                    <div id="mirror-placeholder" class="mirror-placeholder">
-                        <div class="pulse-ring"></div>
-                        <p id="mirror-wait-msg">Menunggu stream...</p>
-                    </div>
-                </div>
-
-                <!-- Sender Controls -->
-                <div id="sender-controls" class="hidden">
-                    <div class="sender-actions">
-                        <button id="btn-stop-capture" class="btn-danger-sm">⏹ Stop Share</button>
-                        <span id="share-status-label" class="share-label">Belum berbagi</span>
-                    </div>
-                </div>
-
-                <!-- PC Options Panel (Receiver Side) -->
-                <div id="pc-options-panel" class="pc-options hidden">
-                    <div class="pc-options-title">🖥️ Opsi PC</div>
-                    <div class="pc-options-grid">
-
-                        <!-- Mirroring Recorder -->
-                        <div class="pc-option-card" id="option-recorder">
-                            <div class="pc-opt-icon">🎥</div>
-                            <div class="pc-opt-info">
-                                <strong>Mirroring Recorder</strong>
-                                <small>Rekam stream yang diterima</small>
-                            </div>
-                            <div class="pc-opt-controls">
-                                <button id="btn-start-record" class="btn-opt-action">● REC</button>
-                                <button id="btn-stop-record" class="btn-opt-action danger hidden">■ Stop</button>
-                                <span id="rec-timer" class="rec-timer hidden">00:00</span>
-                            </div>
-                        </div>
-
-                        <!-- Input Device -->
-                        <div class="pc-option-card" id="option-input">
-                            <div class="pc-opt-icon">🎙️</div>
-                            <div class="pc-opt-info">
-                                <strong>Mirroring Input Device</strong>
-                                <small>Pilih mikrofon / kamera</small>
-                            </div>
-                            <div class="pc-opt-controls">
-                                <select id="select-audio-input" class="device-select">
-                                    <option value="">-- Mikrofon --</option>
-                                </select>
-                                <select id="select-video-input" class="device-select">
-                                    <option value="">-- Kamera --</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Output Device -->
-                        <div class="pc-option-card" id="option-output">
-                            <div class="pc-opt-icon">🔊</div>
-                            <div class="pc-opt-info">
-                                <strong>Mirroring Output Device</strong>
-                                <small>Pilih speaker keluaran</small>
-                            </div>
-                            <div class="pc-opt-controls">
-                                <select id="select-audio-output" class="device-select">
-                                    <option value="">-- Speaker Default --</option>
-                                </select>
-                                <button id="btn-apply-output" class="btn-opt-action">Terapkan</button>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- Transfer Toast -->
-        <div id="transfer-toast" class="toast hidden">
-            <div class="toast-icon" id="toast-icon">🚀</div>
-            <div class="toast-body">
-                <p id="transfer-msg">Mengirim file...</p>
-                <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-            </div>
-        </div>
     </div>
 
-    <script src="script.js"></script>
+    <script>
+        let peer = null;
+        let peerId = null;
+        let connection = null;
+        let myRole = '';
+        let html5QrcodeScanner = null;
+
+        // Element Selectors
+        const elRole = document.getElementById('step-role');
+        const elPcQr = document.getElementById('step-pc-qr');
+        const elHpScan = document.getElementById('step-hp-scan');
+        const elPcDashboard = document.getElementById('step-pc-dashboard');
+        const elHpReceiver = document.getElementById('step-hp-receiver');
+
+        // Fungsi Memilih Peran
+        function initRole(role) {
+            myRole = role;
+            elRole.classList.add('hidden');
+
+            if (role === 'PC') {
+                elPcQr.classList.remove('hidden');
+                setupPC();
+            } else {
+                elHpScan.classList.remove('hidden');
+                setupHP();
+            }
+        }
+
+        // ==========================================
+        // CONFIGURASI UNTUK PC (SENDER)
+        // ==========================================
+        function setupPC() {
+            // Membuat ID unik acak untuk PC
+            peerId = 'mirror-' + Math.random().toString(36).substr(2, 9);
+            peer = new Peer(peerId);
+
+            peer.on('open', (id) => {
+                document.querySelectorAll('.id-display').forEach(el => el.innerText = "ID: " + id);
+                // Generate QR Code berisi ID PC tersebut
+                new QRCode(document.getElementById("qrcode"), {
+                    text: id,
+                    width: 200,
+                    height: 200,
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+            });
+
+            // Mendengarkan jika HP tersambung melalui Data Connection
+            peer.on('connection', (conn) => {
+                connection = conn;
+                handleConnection();
+            });
+        }
+
+        function handleConnection() {
+            // Jika sukses terhubung, pindah ke kontrol dashboard PC
+            elPcQr.classList.add('hidden');
+            elPcDashboard.classList.remove('hidden');
+        }
+
+        // 1. Fungsi Mirroring Layar PC
+        async function startScreenMirroring() {
+            try {
+                // Mengambil resource layar PC
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: false // Kita pisah dengan opsi audio sistem di bawah
+                });
+                
+                // Panggil HP dan kirim stream video
+                peer.call(connection.peer, stream);
+                document.getElementById('btn-screen').innerText = "🟢 Layar Sedang Dibagikan";
+                document.getElementById('btn-screen').disabled = true;
+            } catch (err) {
+                console.error("Gagal share screen:", err);
+                alert("Gagal mengakses fitur Share Screen. Pastikan browser mendukung.");
+            }
+        }
+
+        // 2 & 3. Fungsi Mirroring Audio (Mic atau System)
+        async function startAudioMirroring(type) {
+            try {
+                let stream;
+                if (type === 'mic') {
+                    // Mengambil input microphone
+                    stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+                    document.getElementById('btn-mic').innerText = "🟢 Microphone Aktif";
+                    document.getElementById('btn-mic').disabled = true;
+                } else if (type === 'system') {
+                    // Mengambil output suara sistem melalui getDisplayMedia (wajib centang share audio saat pop-up browser muncul)
+                    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                    // Matikan trek video karena kita hanya butuh audionya saja
+                    stream.getVideoTracks().forEach(track => track.stop());
+                    document.getElementById('btn-system-audio').innerText = "🟢 Audio Sistem Aktif";
+                    document.getElementById('btn-system-audio').disabled = true;
+                }
+
+                // Panggil HP dan kirim stream audio
+                peer.call(connection.peer, stream);
+            } catch (err) {
+                console.error("Gagal share audio:", err);
+                alert("Gagal membagikan audio. Pastikan Anda memberikan izin akses device.");
+            }
+        }
+
+
+        // ==========================================
+        // CONFIGURASI UNTUK HP (RECEIVER)
+        // ==========================================
+        function setupHP() {
+            peer = new Peer();
+
+            peer.on('open', (id) => {
+                document.getElementById('scan-status').innerText = "Kamera siap. Silakan scan.";
+                startScanner();
+            });
+
+            // Mendengarkan kiriman Media Stream (Video/Audio) dari PC
+            peer.on('call', (call) => {
+                call.answer(); // Jawab panggilan tanpa mengirim balik stream HP
+                
+                call.on('stream', (remoteStream) => {
+                    document.getElementById('video-placeholder').classList.add('hidden');
+                    
+                    // Deteksi apakah stream mengandung Video atau hanya Audio
+                    if (remoteStream.getVideoTracks().length > 0) {
+                        const videoEl = document.getElementById('remote-video');
+                        videoEl.srcObject = remoteStream;
+                    } else if (remoteStream.getAudioTracks().length > 0) {
+                        const audioEl = document.getElementById('remote-audio');
+                        audioEl.srcObject = remoteStream;
+                    }
+                });
+            });
+        }
+
+        // Fungsi Membuka Kamera HP & Scan QR Code
+        function startScanner() {
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            // decodedText berisi ID dari PC
+            html5QrcodeScanner.clear(); // Matikan scanner
+            document.getElementById('step-hp-scan').classList.add('hidden');
+            elHpReceiver.classList.remove('hidden');
+
+            // Buka koneksi data ke PC
+            connection = peer.connect(decodedText);
+            
+            connection.on('open', () => {
+                console.log("Terhubung ke PC:", decodedText);
+            });
+        }
+
+        function onScanFailure(error) {
+            // Scan gagal berulang kali sewaktu mencari QR (diabaikan agar terus mencari)
+        }
+    </script>
 </body>
 </html>
