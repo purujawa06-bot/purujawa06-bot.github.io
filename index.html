@@ -65,10 +65,16 @@
                         <i class="fa-solid fa-users-rectangle w-5"></i> Collab Text
                     </button>
 
-                    <button @click="currentTab = 'mirroring'; if(isMobileLayout()) sidebarOpen = false; initCollab();" 
+                    <button @click="currentTab = 'mirroring'; if(isMobileLayout()) sidebarOpen = false;" 
                             :class="currentTab === 'mirroring' ? 'bg-indigo-600/20 text-indigo-400 border-l-4 border-indigo-500' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'"
                             class="w-full flex items-center gap-3 px-4 py-3 rounded-r-lg text-left transition-all duration-200">
                         <i class="fa-solid fa-display w-5"></i> Mirroring
+                    </button>
+
+                    <button @click="currentTab = 'connectivity'; if(isMobileLayout()) sidebarOpen = false; initCollab();" 
+                            :class="currentTab === 'connectivity' ? 'bg-indigo-600/20 text-indigo-400 border-l-4 border-indigo-500' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'"
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-r-lg text-left transition-all duration-200">
+                        <i class="fa-solid fa-network-wired w-5"></i> Connectivity
                     </button>
                     
                     <div class="text-xs font-semibold text-gray-500 uppercase px-4 pt-4 pb-2">Update</div>
@@ -120,100 +126,95 @@
             <div class="p-4 lg:p-8 max-w-6xl w-full mx-auto" x-cloak>
 
                 <!-- Collaboration Text -->
-                <div x-show="currentTab === 'collabText'" class="space-y-6" x-init="$watch('collabText', value => syncText(value))">
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <!-- Editor Side -->
-                        <div class="lg:col-span-2 space-y-4">
-                            <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col h-[600px]">
-                                <div class="bg-gray-800/50 px-4 py-2 border-b border-gray-800 flex justify-between items-center">
-                                    <span class="text-xs font-mono text-gray-400">COLLABORATIVE_EDITOR.md</span>
-                                    <div class="flex items-center gap-2">
-                                        <span :class="peerStatus === 'Connected' ? 'bg-green-500' : 'bg-yellow-500'" class="w-2 h-2 rounded-full"></span>
-                                        <span class="text-[10px] uppercase tracking-wider text-gray-400" x-text="peerStatus"></span>
-                                    </div>
+                <div x-show="currentTab === 'collabText'" class="space-y-6">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col h-[700px]">
+                        <div class="bg-gray-800/50 px-4 py-2 border-b border-gray-800 flex justify-between items-center">
+                            <span class="text-xs font-mono text-gray-400">COLLABORATIVE_EDITOR.md</span>
+                            <div class="flex items-center gap-2">
+                                <span :class="peerStatus === 'Connected' ? 'bg-green-500' : 'bg-yellow-500'" class="w-2 h-2 rounded-full"></span>
+                                <span class="text-[10px] uppercase tracking-wider text-gray-400" x-text="peerStatus"></span>
+                            </div>
+                        </div>
+                        <textarea 
+                            x-model="collabText" 
+                            @input="syncText($event.target.value)"
+                            class="flex-1 bg-transparent p-6 text-gray-300 font-mono text-sm focus:outline-none resize-none custom-scrollbar"
+                            placeholder="Tulis sesuatu di sini... Teman Anda akan melihatnya secara langsung setelah terhubung di tab Connectivity."></textarea>
+                        <div class="p-3 bg-gray-900/50 border-t border-gray-800 flex justify-between items-center">
+                            <div class="flex gap-4">
+                                <button @click="copyCollabText()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                                    <i class="fa-solid fa-copy"></i> Salin Teks
+                                </button>
+                                <button @click="currentTab = 'connectivity'" class="text-xs text-gray-500 hover:text-gray-400 flex items-center gap-1">
+                                    <i class="fa-solid fa-link"></i> Atur Koneksi
+                                </button>
+                            </div>
+                            <span class="text-[10px] text-gray-500" x-text="collabText.length + ' karakter'"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Connectivity Tab -->
+                <div x-show="currentTab === 'connectivity'" class="space-y-6">
+                    <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-gray-900 border border-gray-800 p-8 rounded-2xl space-y-6">
+                            <div class="flex items-center gap-3 mb-2">
+                                <div class="bg-indigo-600 p-2 rounded-lg"><i class="fa-solid fa-plug text-white"></i></div>
+                                <h3 class="text-xl font-bold text-white">Status Koneksi</h3>
+                            </div>
+                            
+                            <div class="flex items-center gap-3 p-4 bg-gray-950 rounded-xl border border-gray-800">
+                                <div :class="peerStatus === 'Connected' ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-yellow-500'" class="w-3 h-3 rounded-full animate-pulse"></div>
+                                <div>
+                                    <div class="text-[10px] uppercase text-gray-500 font-bold">Network Status</div>
+                                    <div class="text-sm font-mono text-gray-200" x-text="peerStatus"></div>
                                 </div>
-                                <textarea 
-                                    x-model="collabText" 
-                                    class="flex-1 bg-transparent p-6 text-gray-300 font-mono text-sm focus:outline-none resize-none custom-scrollbar"
-                                    placeholder="Tulis sesuatu di sini... Teman Anda akan melihatnya secara langsung."></textarea>
-                                <div class="p-3 bg-gray-900/50 border-t border-gray-800 flex justify-between items-center">
-                                    <button @click="copyCollabText()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
-                                        <i class="fa-solid fa-copy"></i> Salin Teks
-                                    </button>
-                                    <span class="text-[10px] text-gray-500" x-text="collabText.length + ' karakter'"></span>
+                            </div>
+
+                            <div class="space-y-4 pt-4">
+                                <button @click="startNewSession()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl font-bold transition flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-plus"></i> Buat Room Baru
+                                </button>
+                                <div class="relative py-2">
+                                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-800"></div></div>
+                                    <div class="relative flex justify-center text-[10px] uppercase"><span class="bg-gray-900 px-2 text-gray-500">Atau Gabung Ke Room</span></div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="text" x-model="roomCodeInput" placeholder="Masukkan ID Room..." class="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-gray-300 focus:border-indigo-500 focus:outline-none">
+                                    <button @click="joinRoomManual()" class="bg-gray-800 hover:bg-gray-700 px-4 rounded-xl text-white text-sm font-bold border border-gray-700">Join</button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Sidebar Info -->
-                        <div class="space-y-6">
-                            <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl space-y-4">
-                                <h3 class="font-bold text-white flex items-center gap-2">
-                                    <i class="fa-solid fa-share-nodes text-indigo-500"></i> Kolaborasi
-                                </h3>
-                                
-                                <!-- State: No Room -->
-                                <div x-show="!roomId" class="space-y-4">
-                                    <p class="text-xs text-gray-400">Pilih opsi untuk memulai kolaborasi real-time.</p>
-                                    <button @click="startNewSession()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2">
-                                        <i class="fa-solid fa-plus"></i> Generate Room
-                                    </button>
-                                    
-                                    <div class="relative py-2">
-                                        <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-800"></div></div>
-                                        <div class="relative flex justify-center text-[10px] uppercase"><span class="bg-gray-900 px-2 text-gray-500">Atau Gabung</span></div>
-                                    </div>
-
-                                    <div class="space-y-2">
-                                        <input type="text" x-model="roomCodeInput" placeholder="Masukkan Kode Room" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-xs text-gray-300 focus:border-indigo-500 focus:outline-none">
-                                        <button @click="joinRoomManual()" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded-lg text-xs font-medium transition">
-                                            Join Room
-                                        </button>
-                                    </div>
+                        <div class="bg-gray-900 border border-gray-800 p-8 rounded-2xl space-y-6">
+                            <div x-show="roomId" class="space-y-6">
+                                <div class="text-center">
+                                    <div class="bg-white p-3 rounded-2xl inline-block shadow-xl shadow-indigo-500/10" id="qrcode-container"></div>
+                                    <p class="text-[10px] text-gray-500 mt-2 uppercase tracking-widest font-bold">Scan untuk bergabung</p>
                                 </div>
 
-                                <!-- State: Room Active -->
-                                <div x-show="roomId" class="space-y-4">
-                                    <p class="text-xs text-gray-400">Bagikan QR Code atau link untuk menulis bersama.</p>
-                                    <div class="relative group">
-                                        <div class="bg-white p-2 rounded-lg w-44 h-44 mx-auto shadow-lg shadow-indigo-500/20" id="qrcode-container">
-                                            <!-- QR Code will be injected here -->
-                                        </div>
-                                    </div>
-
-                                    <div class="space-y-2 pt-2">
-                                        <label class="text-[10px] uppercase text-gray-500 font-bold">Room ID</label>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="text-[10px] uppercase text-gray-500 font-bold mb-1 block">Room ID</label>
                                         <div class="flex gap-2">
-                                            <input type="text" readonly :value="roomId" class="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs text-gray-400 focus:outline-none">
-                                            <button @click="navigator.clipboard.writeText(roomId); addToast('ID disalin!')" class="bg-gray-800 hover:bg-gray-700 px-2 rounded text-gray-300 text-xs border border-gray-700">
-                                                <i class="fa-solid fa-copy"></i>
-                                            </button>
+                                            <input type="text" readonly :value="roomId" class="flex-1 bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-xs font-mono text-indigo-400">
+                                            <button @click="navigator.clipboard.writeText(roomId); addToast('ID disalin!')" class="bg-gray-800 px-3 rounded-lg text-gray-400 border border-gray-700"><i class="fa-solid fa-copy"></i></button>
                                         </div>
                                     </div>
-
-                                    <div class="space-y-2">
-                                        <label class="text-[10px] uppercase text-gray-500 font-bold">Direct Link</label>
-                                        <div class="flex gap-2">
-                                            <input type="text" readonly :value="getCollabUrl()" class="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-[10px] text-gray-500 focus:outline-none">
-                                            <button @click="copyCollabUrl()" class="bg-indigo-600 hover:bg-indigo-500 px-2 rounded text-white text-xs">
-                                                <i class="fa-solid fa-link"></i>
-                                            </button>
-                                        </div>
+                                    <div>
+                                        <label class="text-[10px] uppercase text-gray-500 font-bold mb-1 block">Direct Link</label>
+                                        <button @click="copyCollabUrl()" class="w-full bg-gray-800 hover:bg-gray-700 py-2 rounded-lg text-xs text-gray-300 border border-gray-700 flex items-center justify-center gap-2">
+                                            <i class="fa-solid fa-link"></i> Salin Tautan Langsung
+                                        </button>
                                     </div>
-
-                                    <button @click="location.hash=''; location.reload()" class="w-full mt-2 text-[10px] text-red-400 hover:text-red-300 transition">
-                                        <i class="fa-solid fa-right-from-bracket mr-1"></i> Tinggalkan Sesi
+                                    <button @click="location.hash=''; location.reload()" class="w-full pt-4 text-xs text-red-500 hover:text-red-400 transition">
+                                        <i class="fa-solid fa-power-off mr-1"></i> Putuskan Sesi & Refresh
                                     </button>
                                 </div>
                             </div>
-
-                            <div class="bg-indigo-900/20 border border-indigo-500/20 p-4 rounded-xl">
-                                <h4 class="text-xs font-bold text-indigo-400 mb-2 uppercase">Cara Kerja</h4>
-                                <ul class="text-[11px] text-gray-400 space-y-2">
-                                    <li class="flex gap-2"><i class="fa-solid fa-check text-indigo-500"></i> Koneksi langsung antar browser (P2P).</li>
-                                    <li class="flex gap-2"><i class="fa-solid fa-check text-indigo-500"></i> Teks disimpan otomatis di browser Anda.</li>
-                                    <li class="flex gap-2"><i class="fa-solid fa-check text-indigo-500"></i> Tanpa server perantara untuk data teks.</li>
-                                </ul>
+                            <div x-show="!roomId" class="flex flex-col items-center justify-center h-full text-center text-gray-500 py-10">
+                                <i class="fa-solid fa-ghost text-4xl mb-4 opacity-20"></i>
+                                <p class="text-sm">Belum ada room aktif.<br>Buat room atau join untuk melihat detail koneksi.</p>
                             </div>
                         </div>
                     </div>
@@ -370,75 +371,7 @@
              x-transition:leave-end="opacity-0"
              class="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 lg:hidden"></div>
 
-        <!-- Mandatory Connection Setup Overlay -->
-        <div x-show="!setupComplete" 
-             class="fixed inset-0 z-[100] bg-gray-950 flex items-center justify-center p-4"
-             x-transition:enter="transition ease-out duration-300"
-             x-transition:enter-start="opacity-0 scale-95"
-             x-transition:enter-end="opacity-100 scale-100">
-            
-            <div class="max-w-md w-full bg-gray-900 border border-gray-800 rounded-3xl p-8 shadow-2xl space-y-8">
-                <div class="text-center space-y-2">
-                    <div class="bg-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/20">
-                        <i class="fa-solid fa-link text-3xl text-white"></i>
-                    </div>
-                    <h2 class="text-2xl font-bold text-white">Inisialisasi Sesi</h2>
-                    <p class="text-gray-400 text-sm">Hubungkan perangkat Anda dengan rekan untuk mulai menggunakan fitur kolaborasi dan mirroring.</p>
-                </div>
 
-                <!-- Step 1: Selection -->
-                <div x-show="!peer" class="grid grid-cols-1 gap-4">
-                    <button @click="startNewSession()" class="flex items-center gap-4 p-4 bg-gray-800/50 hover:bg-indigo-600/20 border border-gray-700 hover:border-indigo-500 rounded-2xl transition-all group">
-                        <div class="bg-gray-700 group-hover:bg-indigo-600 p-3 rounded-xl transition">
-                            <i class="fa-solid fa-plus text-white"></i>
-                        </div>
-                        <div class="text-left">
-                            <div class="font-bold text-white">Buat Room Baru</div>
-                            <div class="text-xs text-gray-500">Mulai sesi sebagai host</div>
-                        </div>
-                    </button>
-                    
-                    <div class="relative py-2">
-                        <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-800"></div></div>
-                        <div class="relative flex justify-center text-[10px] uppercase"><span class="bg-gray-900 px-2 text-gray-500 font-bold">Atau</span></div>
-                    </div>
-
-                    <div class="space-y-3">
-                        <input type="text" x-model="roomCodeInput" placeholder="Masukkan Kode Room (ID)" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-sm text-gray-300 focus:border-indigo-500 focus:outline-none transition">
-                        <button @click="joinRoomManual()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl font-bold transition">
-                            Bergabung ke Room
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Step 2: Waiting for Peer -->
-                <div x-show="peer && peerStatus !== 'Connected'" class="space-y-6">
-                    <div class="flex flex-col items-center justify-center py-4">
-                        <div class="bg-white p-3 rounded-2xl mb-4" id="setup-qrcode-container"></div>
-                        <div class="text-center">
-                            <div class="text-[10px] uppercase text-gray-500 font-bold tracking-widest mb-1">Room ID</div>
-                            <div class="bg-gray-950 px-4 py-2 rounded-lg border border-gray-800 font-mono text-indigo-400 select-all" x-text="roomId"></div>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center justify-center gap-3 text-sm text-gray-400">
-                        <span class="flex h-2 w-2 relative">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
-                        </span>
-                        <span x-text="peerStatus"></span>
-                    </div>
-
-                    <button @click="location.reload()" class="w-full text-xs text-gray-500 hover:text-red-400 transition">
-                        Batalkan & Mulai Ulang
-                    </button>
-                </div>
-
-                <div class="text-[10px] text-center text-gray-600 uppercase tracking-tighter">
-                    Puru Tools P2P Network v1.2.0
-                </div>
-            </div>
-        </div>
     </div>
 
     <script>
@@ -515,7 +448,7 @@
                 roomId: null,
                 roomCodeInput: '',
                 isJoining: false,
-                setupComplete: false,
+                setupComplete: true,
                 connections: [],
                 settings: {
                     viewMode: 'auto',
@@ -589,6 +522,7 @@
                         dashboard: 'Dashboard',
                         collabText: 'Collaboration Editor',
                         mirroring: 'Screen & Audio Mirroring',
+                        connectivity: 'Connectivity & Network',
                         comingSoon: 'Fitur Mendatang',
                         settings: 'Application Settings'
                     };
@@ -772,18 +706,15 @@
                     qr.addData(this.getCollabUrl());
                     qr.make();
                     
-                    const containers = ['qrcode-container', 'setup-qrcode-container'];
-                    containers.forEach(id => {
-                        const container = document.getElementById(id);
-                        if (container) {
-                            container.innerHTML = qr.createImgTag(4);
-                            const img = container.querySelector('img');
-                            if (img) {
-                                img.style.width = id.includes('setup') ? '180px' : '100%';
-                                img.style.height = id.includes('setup') ? '180px' : '100%';
-                            }
+                    const container = document.getElementById('qrcode-container');
+                    if (container) {
+                        container.innerHTML = qr.createImgTag(5);
+                        const img = container.querySelector('img');
+                        if (img) {
+                            img.className = "rounded-lg mx-auto";
+                            img.style.maxWidth = '180px';
                         }
-                    });
+                    }
                 },
 
                 addToast(message) {
