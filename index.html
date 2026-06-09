@@ -1,109 +1,808 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuickSync Text - SPA</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Puru Tools - Modern SPA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
 </head>
-<body x-data="spaApp()" x-init="init()">
-    <nav class="navbar">
-        <div class="nav-container">
-            <a href="#home" class="nav-logo">QuickSync</a>
-            <div class="nav-links">
-                <a href="#home" :class="currentPage === 'home' ? 'active' : ''">Home</a>
-                <a href="#editor" :class="currentPage === 'editor' ? 'active' : ''">Editor</a>
-                <a href="#about" :class="currentPage === 'about' ? 'active' : ''">Tentang</a>
+<body class="bg-gray-950 text-gray-100 min-h-screen font-sans overflow-hidden" 
+      x-data="puruApp()">
+
+    <div class="flex h-screen overflow-hidden">
+        
+        <!-- Sidebar -->
+        <aside 
+            :class="{ 
+                'translate-x-0': sidebarOpen || settings.viewMode === 'desktop', 
+                '-translate-x-full': !sidebarOpen && settings.viewMode !== 'desktop',
+                'fixed inset-y-0 left-0 z-40 w-72': settings.viewMode === 'mobile' || (settings.viewMode === 'auto' && window.innerWidth < 1024),
+                'relative w-64': settings.viewMode === 'desktop' || (settings.viewMode === 'auto' && window.innerWidth >= 1024)
+            }"
+            class="bg-gray-900 border-r border-gray-800 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0">
+            
+            <!-- Sidebar Header -->
+            <div class="p-5 shrink-0 border-b border-gray-800/50">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-indigo-600 p-2 rounded-lg text-white">
+                            <i class="fa-solid fa-screwdriver-wrench text-xl"></i>
+                        </div>
+                        <span class="text-xl font-bold tracking-wider bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                            PURU TOOLS
+                        </span>
+                    </div>
+                    <button @click="sidebarOpen = false" class="lg:hidden text-gray-400 p-2">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
             </div>
-        </div>
-    </nav>
 
-    <div class="container">
-        <!-- HOME PAGE -->
-        <div x-show="currentPage === 'home'" x-transition>
-            <header class="hero">
-                <h1>Kolaborasi Teks Real-time Tanpa Server</h1>
-                <p>Berbagi teks secara instan antar perangkat menggunakan teknologi Peer-to-Peer.</p>
-                <a href="#editor" class="btn primary btn-large">Mulai Menulis</a>
-            </header>
+            <!-- Navigation Area -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-5">
+                <nav class="space-y-2">
+                    <button @click="currentTab = 'dashboard'; if(isMobileLayout()) sidebarOpen = false" 
+                            :class="currentTab === 'dashboard' ? 'bg-indigo-600/20 text-indigo-400 border-l-4 border-indigo-500' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'"
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-r-lg text-left transition-all duration-200">
+                        <i class="fa-solid fa-chart-pie w-5"></i> Dashboard
+                    </button>
 
-            <section class="features">
-                <div class="card">
-                    <h3>Privat & Aman</h3>
-                    <p>Data dikirim langsung antar browser tanpa melalui server penyimpanan.</p>
+                    <button @click="currentTab = 'collabText'; if(isMobileLayout()) sidebarOpen = false; initCollab();" 
+                            :class="currentTab === 'collabText' ? 'bg-indigo-600/20 text-indigo-400 border-l-4 border-indigo-500' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'"
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-r-lg text-left transition-all duration-200">
+                        <i class="fa-solid fa-users-rectangle w-5"></i> Collab Text
+                    </button>
+
+                    <button @click="currentTab = 'mirroring'; if(isMobileLayout()) sidebarOpen = false; initCollab();" 
+                            :class="currentTab === 'mirroring' ? 'bg-indigo-600/20 text-indigo-400 border-l-4 border-indigo-500' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'"
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-r-lg text-left transition-all duration-200">
+                        <i class="fa-solid fa-display w-5"></i> Mirroring
+                    </button>
+                    
+                    <div class="text-xs font-semibold text-gray-500 uppercase px-4 pt-4 pb-2">Update</div>
+                    
+                    <button @click="currentTab = 'comingSoon'; if(isMobileLayout()) sidebarOpen = false" 
+                            :class="currentTab === 'comingSoon' ? 'bg-indigo-600/20 text-indigo-400 border-l-4 border-indigo-500' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'"
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-r-lg text-left transition-all duration-200">
+                        <i class="fa-solid fa-rocket w-5"></i> Coming Soon
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Fixed Sidebar Footer -->
+            <div class="shrink-0 p-5 border-t border-gray-800/50">
+                <button @click="currentTab = 'settings'; if(isMobileLayout()) sidebarOpen = false" 
+                        :class="currentTab === 'settings' ? 'bg-indigo-600/20 text-indigo-400 border-l-4 border-indigo-500' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'"
+                        class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all duration-200">
+                    <i class="fa-solid fa-gear w-5"></i> Settings
+                </button>
+            </div>
+
+            <div class="p-4 border-t border-gray-800 text-center text-xs text-gray-500">
+                Puru Tools v1.2.0 &copy; 2026
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col overflow-y-auto bg-gray-950 custom-scrollbar relative">
+            
+            <!-- Header -->
+            <header class="bg-gray-900/80 backdrop-blur-md border-b border-gray-800 px-4 lg:px-8 py-4 flex justify-between items-center sticky top-0 z-30 shrink-0">
+                <div class="flex items-center gap-4">
+                    <button @click="sidebarOpen = true" x-show="isMobileLayout()" class="text-gray-400 p-2 hover:bg-gray-800 rounded-lg">
+                        <i class="fa-solid fa-bars-staggered text-xl"></i>
+                    </button>
+                    <h1 class="text-lg font-medium text-gray-300" x-text="getTabTitle()"></h1>
                 </div>
-                <div class="card">
-                    <h3>Mudah Digunakan</h3>
-                    <p>Cukup scan QR Code atau salin link untuk mulai berkolaborasi.</p>
-                </div>
-            </section>
-        </div>
-
-        <!-- EDITOR PAGE -->
-        <div x-show="currentPage === 'editor'" x-transition>
-            <header>
-                <h1>QuickSync Editor</h1>
-                <p id="status" x-text="statusMsg">Menginisialisasi...</p>
-            </header>
-
-            <div id="setup-section" class="card">
-                <div id="qrcode-container">
-                    <div id="qrcode" x-ref="qrcode"></div>
-                    <p>Scan untuk join kolaborasi</p>
-                </div>
-                <div class="info-group">
-                    <label>ID Anda:</label>
-                    <div class="id-display">
-                        <span x-text="myPeerId">...</span>
-                        <button @click="copyJoinLink" class="btn-sm">Salin Link</button>
+                <div class="flex items-center gap-4">
+                    <div class="hidden sm:flex items-center gap-2">
+                        <span class="flex h-2 w-2 relative">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                        <span class="text-xs text-gray-400 uppercase tracking-widest font-bold">System Online</span>
                     </div>
                 </div>
-            </div>
+            </header>
 
-            <div class="editor-section card">
-                <textarea id="text-input" x-model="textContent" @input="handleInput" placeholder="Mulai mengetik di sini..."></textarea>
-                <div class="controls">
-                    <button @click="copyText" class="btn primary">Salin Teks</button>
-                    <button @click="clearText" class="btn danger">Hapus Semua</button>
+            <div class="p-4 lg:p-8 max-w-6xl w-full mx-auto" x-cloak>
+
+                <!-- Collaboration Text -->
+                <div x-show="currentTab === 'collabText'" class="space-y-6" x-init="$watch('collabText', value => syncText(value))">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Editor Side -->
+                        <div class="lg:col-span-2 space-y-4">
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col h-[600px]">
+                                <div class="bg-gray-800/50 px-4 py-2 border-b border-gray-800 flex justify-between items-center">
+                                    <span class="text-xs font-mono text-gray-400">COLLABORATIVE_EDITOR.md</span>
+                                    <div class="flex items-center gap-2">
+                                        <span :class="peerStatus === 'Connected' ? 'bg-green-500' : 'bg-yellow-500'" class="w-2 h-2 rounded-full"></span>
+                                        <span class="text-[10px] uppercase tracking-wider text-gray-400" x-text="peerStatus"></span>
+                                    </div>
+                                </div>
+                                <textarea 
+                                    x-model="collabText" 
+                                    class="flex-1 bg-transparent p-6 text-gray-300 font-mono text-sm focus:outline-none resize-none custom-scrollbar"
+                                    placeholder="Tulis sesuatu di sini... Teman Anda akan melihatnya secara langsung."></textarea>
+                                <div class="p-3 bg-gray-900/50 border-t border-gray-800 flex justify-between items-center">
+                                    <button @click="copyCollabText()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                                        <i class="fa-solid fa-copy"></i> Salin Teks
+                                    </button>
+                                    <span class="text-[10px] text-gray-500" x-text="collabText.length + ' karakter'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sidebar Info -->
+                        <div class="space-y-6">
+                            <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl space-y-4">
+                                <h3 class="font-bold text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-share-nodes text-indigo-500"></i> Kolaborasi
+                                </h3>
+                                
+                                <!-- State: No Room -->
+                                <div x-show="!roomId" class="space-y-4">
+                                    <p class="text-xs text-gray-400">Pilih opsi untuk memulai kolaborasi real-time.</p>
+                                    <button @click="startNewSession()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2">
+                                        <i class="fa-solid fa-plus"></i> Generate Room
+                                    </button>
+                                    
+                                    <div class="relative py-2">
+                                        <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-800"></div></div>
+                                        <div class="relative flex justify-center text-[10px] uppercase"><span class="bg-gray-900 px-2 text-gray-500">Atau Gabung</span></div>
+                                    </div>
+
+                                    <div class="space-y-2">
+                                        <input type="text" x-model="roomCodeInput" placeholder="Masukkan Kode Room" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-xs text-gray-300 focus:border-indigo-500 focus:outline-none">
+                                        <button @click="joinRoomManual()" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded-lg text-xs font-medium transition">
+                                            Join Room
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- State: Room Active -->
+                                <div x-show="roomId" class="space-y-4">
+                                    <p class="text-xs text-gray-400">Bagikan QR Code atau link untuk menulis bersama.</p>
+                                    <div class="relative group">
+                                        <div class="bg-white p-2 rounded-lg w-44 h-44 mx-auto shadow-lg shadow-indigo-500/20" id="qrcode-container">
+                                            <!-- QR Code will be injected here -->
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-2 pt-2">
+                                        <label class="text-[10px] uppercase text-gray-500 font-bold">Room ID</label>
+                                        <div class="flex gap-2">
+                                            <input type="text" readonly :value="roomId" class="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs text-gray-400 focus:outline-none">
+                                            <button @click="navigator.clipboard.writeText(roomId); addToast('ID disalin!')" class="bg-gray-800 hover:bg-gray-700 px-2 rounded text-gray-300 text-xs border border-gray-700">
+                                                <i class="fa-solid fa-copy"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] uppercase text-gray-500 font-bold">Direct Link</label>
+                                        <div class="flex gap-2">
+                                            <input type="text" readonly :value="getCollabUrl()" class="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-[10px] text-gray-500 focus:outline-none">
+                                            <button @click="copyCollabUrl()" class="bg-indigo-600 hover:bg-indigo-500 px-2 rounded text-white text-xs">
+                                                <i class="fa-solid fa-link"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <button @click="location.hash=''; location.reload()" class="w-full mt-2 text-[10px] text-red-400 hover:text-red-300 transition">
+                                        <i class="fa-solid fa-right-from-bracket mr-1"></i> Tinggalkan Sesi
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="bg-indigo-900/20 border border-indigo-500/20 p-4 rounded-xl">
+                                <h4 class="text-xs font-bold text-indigo-400 mb-2 uppercase">Cara Kerja</h4>
+                                <ul class="text-[11px] text-gray-400 space-y-2">
+                                    <li class="flex gap-2"><i class="fa-solid fa-check text-indigo-500"></i> Koneksi langsung antar browser (P2P).</li>
+                                    <li class="flex gap-2"><i class="fa-solid fa-check text-indigo-500"></i> Teks disimpan otomatis di browser Anda.</li>
+                                    <li class="flex gap-2"><i class="fa-solid fa-check text-indigo-500"></i> Tanpa server perantara untuk data teks.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mirroring UI -->
+                <div x-show="currentTab === 'mirroring'" class="space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        <div class="lg:col-span-3">
+                            <div class="bg-black border border-gray-800 rounded-2xl overflow-hidden aspect-video flex items-center justify-center relative group">
+                                <video id="mirror-video" class="w-full h-full object-contain" autoplay playsinline></video>
+                                <div x-show="!mirroringActive" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/50 backdrop-blur-sm">
+                                    <i class="fa-solid fa-video-slash text-5xl text-gray-700 mb-4"></i>
+                                    <p class="text-gray-400">Menunggu aliran media...</p>
+                                </div>
+                                <div x-show="mirroringActive" class="absolute top-4 left-4 bg-red-600 text-white text-[10px] px-2 py-1 rounded font-bold animate-pulse">
+                                    LIVE
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl">
+                                <h3 class="font-bold text-white mb-4 flex items-center gap-2">
+                                    <i class="fa-solid fa-tower-broadcast text-indigo-500"></i> Kontrol Media
+                                </h3>
+                                
+                                <div class="space-y-3" x-show="!localStream">
+                                    <button @click="startMirroring('screen')" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-lg flex items-center justify-center gap-2 transition">
+                                        <i class="fa-solid fa-desktop"></i> Bagikan Layar
+                                    </button>
+                                    <button @click="startMirroring('audio')" class="w-full bg-gray-800 hover:bg-gray-700 text-white py-3 rounded-lg flex items-center justify-center gap-2 transition">
+                                        <i class="fa-solid fa-microphone"></i> Bagikan Audio
+                                    </button>
+                                </div>
+
+                                <button x-show="localStream" @click="stopMirroring()" class="w-full bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/50 py-3 rounded-lg flex items-center justify-center gap-2 transition">
+                                    <i class="fa-solid fa-stop"></i> Berhenti Berbagi
+                                </button>
+
+                                <div class="mt-6 pt-6 border-t border-gray-800 space-y-2">
+                                    <label class="text-[10px] uppercase text-gray-500 font-bold">Status Koneksi</label>
+                                    <div class="flex items-center gap-2">
+                                        <div :class="peerStatus === 'Connected' ? 'bg-green-500' : 'bg-yellow-500'" class="w-2 h-2 rounded-full"></div>
+                                        <span class="text-xs text-gray-300" x-text="peerStatus"></span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 italic mt-2">*Berbagi media memerlukan teman yang sudah terhubung dalam room yang sama.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dashboard -->
+                <div x-show="currentTab === 'dashboard'" class="space-y-6">
+                    <div class="bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-500/20 rounded-2xl p-6 lg:p-8 shadow-xl">
+                        <h2 class="text-2xl lg:text-3xl font-bold mb-2 text-white">Selamat Datang di Puru Tools</h2>
+                        <p class="text-gray-400 max-w-2xl">Platform utilitas ringan Anda. Saat ini kami sedang melakukan pembersihan besar-besaran untuk menghadirkan fitur yang lebih baik.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div @click="currentTab = 'comingSoon'" class="bg-gray-900 border border-gray-800 p-6 rounded-xl hover:border-indigo-500/50 cursor-pointer transition-all group">
+                            <i class="fa-solid fa-clock text-3xl text-indigo-500 mb-4 group-hover:scale-110 transition-transform"></i>
+                            <h3 class="text-lg font-semibold mb-2">Fitur Baru</h3>
+                            <p class="text-sm text-gray-400">Nantikan pembaruan fitur menarik lainnya segera di sini.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Coming Soon Content -->
+                <div x-show="currentTab === 'comingSoon'" class="flex flex-col items-center justify-center min-h-[400px] text-center space-y-6">
+                    <div class="bg-indigo-600/10 p-10 rounded-full border border-indigo-500/20">
+                        <i class="fa-solid fa-rocket text-7xl text-indigo-500 animate-bounce"></i>
+                    </div>
+                    <div class="space-y-2">
+                        <h2 class="text-4xl font-bold text-white">Coming Soon!</h2>
+                        <p class="text-gray-400 max-w-md mx-auto text-lg">Kami sedang mengembangkan rangkaian tools baru yang lebih powerfull dan efisien. Stay tuned!</p>
+                    </div>
+                    <button @click="currentTab = 'dashboard'" class="bg-gray-800 hover:bg-gray-700 text-white px-6 py-2 rounded-full transition text-sm">
+                        Kembali ke Dashboard
+                    </button>
+                </div>
+
+                <!-- Settings UI -->
+                <div x-show="currentTab === 'settings'" class="space-y-6">
+                    <div class="max-w-2xl bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+                        <div class="p-6 border-b border-gray-800">
+                            <h3 class="text-xl font-bold">Pengaturan Aplikasi</h3>
+                            <p class="text-sm text-gray-400">Sesuaikan tampilan dan pengalaman penggunaan Anda.</p>
+                        </div>
+                        <div class="p-6 space-y-8">
+                            <div class="space-y-4">
+                                <label class="block text-sm font-medium text-gray-300">Mode Tampilan (UI Mode)</label>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <button @click="updateSetting('viewMode', 'auto')" 
+                                            :class="settings.viewMode === 'auto' ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' : 'border-gray-800 bg-gray-950 text-gray-400'"
+                                            class="flex flex-col items-center gap-2 p-4 border rounded-xl transition hover:border-gray-600">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                        <span class="text-xs font-semibold">Otomatis</span>
+                                    </button>
+                                    <button @click="updateSetting('viewMode', 'desktop')" 
+                                            :class="settings.viewMode === 'desktop' ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' : 'border-gray-800 bg-gray-950 text-gray-400'"
+                                            class="flex flex-col items-center gap-2 p-4 border rounded-xl transition hover:border-gray-600">
+                                        <i class="fa-solid fa-desktop"></i>
+                                        <span class="text-xs font-semibold">Desktop</span>
+                                    </button>
+                                    <button @click="updateSetting('viewMode', 'mobile')" 
+                                            :class="settings.viewMode === 'mobile' ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' : 'border-gray-800 bg-gray-950 text-gray-400'"
+                                            class="flex flex-col items-center gap-2 p-4 border rounded-xl transition hover:border-gray-600">
+                                        <i class="fa-solid fa-mobile-screen-button"></i>
+                                        <span class="text-xs font-semibold">Mobile</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="space-y-4 pt-4 border-t border-gray-800">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-300">Eruda Console</label>
+                                        <p class="text-xs text-gray-500">Aktifkan konsol pengembang untuk debugging di mobile.</p>
+                                    </div>
+                                    <button 
+                                        @click="updateSetting('erudaEnabled', !settings.erudaEnabled)"
+                                        :class="settings.erudaEnabled ? 'bg-indigo-600' : 'bg-gray-700'"
+                                        class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none">
+                                        <span 
+                                            :class="settings.erudaEnabled ? 'translate-x-5' : 'translate-x-0'"
+                                            class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="pt-4 border-t border-gray-800">
+                                <button @click="resetSettings()" class="text-red-400 hover:text-red-300 text-sm font-medium">
+                                    <i class="fa-solid fa-trash-can mr-2"></i> Reset ke Default
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- Overlay for mobile sidebar -->
+        <!-- Overlay for mobile sidebar -->
+        <div x-show="sidebarOpen && isMobileLayout()" 
+             @click="sidebarOpen = false"
+             x-transition:enter="transition opacity-0 duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition opacity-100 duration-300"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 lg:hidden"></div>
+
+        <!-- Mandatory Connection Setup Overlay -->
+        <div x-show="!setupComplete" 
+             class="fixed inset-0 z-[100] bg-gray-950 flex items-center justify-center p-4"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100">
+            
+            <div class="max-w-md w-full bg-gray-900 border border-gray-800 rounded-3xl p-8 shadow-2xl space-y-8">
+                <div class="text-center space-y-2">
+                    <div class="bg-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/20">
+                        <i class="fa-solid fa-link text-3xl text-white"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-white">Inisialisasi Sesi</h2>
+                    <p class="text-gray-400 text-sm">Hubungkan perangkat Anda dengan rekan untuk mulai menggunakan fitur kolaborasi dan mirroring.</p>
+                </div>
+
+                <!-- Step 1: Selection -->
+                <div x-show="!peer" class="grid grid-cols-1 gap-4">
+                    <button @click="startNewSession()" class="flex items-center gap-4 p-4 bg-gray-800/50 hover:bg-indigo-600/20 border border-gray-700 hover:border-indigo-500 rounded-2xl transition-all group">
+                        <div class="bg-gray-700 group-hover:bg-indigo-600 p-3 rounded-xl transition">
+                            <i class="fa-solid fa-plus text-white"></i>
+                        </div>
+                        <div class="text-left">
+                            <div class="font-bold text-white">Buat Room Baru</div>
+                            <div class="text-xs text-gray-500">Mulai sesi sebagai host</div>
+                        </div>
+                    </button>
+                    
+                    <div class="relative py-2">
+                        <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-800"></div></div>
+                        <div class="relative flex justify-center text-[10px] uppercase"><span class="bg-gray-900 px-2 text-gray-500 font-bold">Atau</span></div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <input type="text" x-model="roomCodeInput" placeholder="Masukkan Kode Room (ID)" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-sm text-gray-300 focus:border-indigo-500 focus:outline-none transition">
+                        <button @click="joinRoomManual()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl font-bold transition">
+                            Bergabung ke Room
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Waiting for Peer -->
+                <div x-show="peer && peerStatus !== 'Connected'" class="space-y-6">
+                    <div class="flex flex-col items-center justify-center py-4">
+                        <div class="bg-white p-3 rounded-2xl mb-4" id="setup-qrcode-container"></div>
+                        <div class="text-center">
+                            <div class="text-[10px] uppercase text-gray-500 font-bold tracking-widest mb-1">Room ID</div>
+                            <div class="bg-gray-950 px-4 py-2 rounded-lg border border-gray-800 font-mono text-indigo-400 select-all" x-text="roomId"></div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-center gap-3 text-sm text-gray-400">
+                        <span class="flex h-2 w-2 relative">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+                        </span>
+                        <span x-text="peerStatus"></span>
+                    </div>
+
+                    <button @click="location.reload()" class="w-full text-xs text-gray-500 hover:text-red-400 transition">
+                        Batalkan & Mulai Ulang
+                    </button>
+                </div>
+
+                <div class="text-[10px] text-center text-gray-600 uppercase tracking-tighter">
+                    Puru Tools P2P Network v1.2.0
                 </div>
             </div>
         </div>
-
-        <!-- ABOUT PAGE -->
-        <div x-show="currentPage === 'about'" x-transition>
-            <div class="card about-card">
-                <h2>Tentang QuickSync Text</h2>
-                <p>QuickSync Text adalah aplikasi berbasis web yang memungkinkan pengguna untuk mensinkronisasi teks secara real-time di berbagai perangkat tanpa memerlukan database pusat.</p>
-                
-                <hr>
-                
-                <h3>Pembuat</h3>
-                <p>Proyek ini dikembangkan dan dikelola oleh:</p>
-                <div class="author-info">
-                    <strong>Github:</strong> <a href="https://github.com/purujawa06-bot" target="_blank">purujawa06-bot</a>
-                </div>
-
-                <h3>Teknologi</h3>
-                <ul>
-                    <li>PeerJS (WebRTC)</li>
-                    <li>QRCode.js</li>
-                    <li>Alpine.js</li>
-                    <li>HTML5, CSS3, & JavaScript</li>
-                </ul>
-            </div>
-        </div>
-        
-        <footer>
-            <template x-if="currentPage === 'editor'">
-                <p x-text="'Terhubung ke: ' + connectionCount + ' perangkat'"></p>
-            </template>
-            <p>&copy; 2024 QuickSync Text. Dibuat oleh purujawa06-bot.</p>
-        </footer>
     </div>
 
-    <script src="script.js"></script>
+    <script>
+        // LOGIC FROM eruda.js
+        function loadEruda() {
+            if (window.eruda && window.eruda._isInit) return;
+            const saved = localStorage.getItem('puru_settings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                if (settings.erudaEnabled === false || settings.erudaEnabled === 'false') return;
+            } else {
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = "https://cdn.jsdelivr.net/npm/eruda";
+            document.body.appendChild(script);
+            script.onload = () => {
+                eruda.init();
+                window.eruda._isInit = true;
+            };
+        }
+
+        function stopEruda() {
+            if (window.eruda) {
+                try {
+                    eruda.destroy();
+                    window.eruda._isInit = false;
+                    const scripts = document.getElementsByTagName('script');
+                    for (let i = 0; i < scripts.length; i++) {
+                        if (scripts[i].src.includes('eruda')) {
+                            scripts[i].remove();
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to destroy Eruda:", e);
+                }
+            }
+        }
+
+        // LOGIC FROM mirroring.js
+        const MirroringHandler = {
+            async getScreenStream() {
+                try {
+                    return await navigator.mediaDevices.getDisplayMedia({
+                        video: { cursor: "always" },
+                        audio: true
+                    });
+                } catch (err) {
+                    console.error("Error sharing screen:", err);
+                    return null;
+                }
+            },
+            async getAudioStream() {
+                try {
+                    return await navigator.mediaDevices.getUserMedia({
+                        audio: true,
+                        video: false
+                    });
+                } catch (err) {
+                    console.error("Error sharing audio:", err);
+                    return null;
+                }
+            }
+        };
+
+        // LOGIC FROM collabText.js
+        function puruApp() {
+            return {
+                currentTab: 'dashboard',
+                sidebarOpen: false,
+                collabText: localStorage.getItem('puru_collab_text') || '',
+                peer: null,
+                peerStatus: 'Disconnected',
+                roomId: null,
+                roomCodeInput: '',
+                isJoining: false,
+                setupComplete: false,
+                connections: [],
+                settings: {
+                    viewMode: 'auto',
+                    erudaEnabled: false,
+                },
+                mirroringActive: false,
+                localStream: null,
+
+                init() {
+                    const savedSettings = localStorage.getItem('puru_settings');
+                    if (savedSettings) {
+                        this.settings = { ...this.settings, ...JSON.parse(savedSettings) };
+                    }
+                    if (this.settings.erudaEnabled === true || this.settings.erudaEnabled === 'true') {
+                        loadEruda();
+                    }
+                    const savedTab = localStorage.getItem('puru_current_tab');
+                    if (savedTab) {
+                        this.currentTab = savedTab;
+                    }
+                    this.$watch('currentTab', value => {
+                        localStorage.setItem('puru_current_tab', value);
+                    });
+
+                    // Cek jika ada parameter room di URL
+                    const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+                    const joinId = urlParams.get('room');
+                    if (joinId) {
+                        this.isJoining = true;
+                        this.initCollab(joinId);
+                    }
+
+                    if (this.isMobileLayout()) {
+                        this.sidebarOpen = false;
+                    }
+                },
+
+                updateSetting(key, value) {
+                    const cleanValue = key === 'erudaEnabled' ? (value === true || value === 'true') : value;
+                    this.settings[key] = cleanValue;
+                    localStorage.setItem('puru_settings', JSON.stringify(this.settings));
+                    if (key === 'erudaEnabled') {
+                        if (cleanValue) {
+                            loadEruda();
+                            this.addToast('Eruda Console diaktifkan');
+                        } else {
+                            stopEruda();
+                            this.addToast('Eruda Console dinonaktifkan');
+                            setTimeout(() => location.reload(), 1000);
+                        }
+                    } else {
+                        this.addToast(`Pengaturan diperbarui`);
+                    }
+                },
+
+                resetSettings() {
+                    this.settings = { viewMode: 'auto', erudaEnabled: false };
+                    localStorage.removeItem('puru_settings');
+                    this.addToast('Pengaturan direset ke default');
+                    setTimeout(() => location.reload(), 1000);
+                },
+
+                isMobileLayout() {
+                    if (this.settings.viewMode === 'mobile') return true;
+                    if (this.settings.viewMode === 'desktop') return false;
+                    return window.innerWidth < 1024;
+                },
+
+                getTabTitle() {
+                    const titles = {
+                        dashboard: 'Dashboard',
+                        collabText: 'Collaboration Editor',
+                        mirroring: 'Screen & Audio Mirroring',
+                        comingSoon: 'Fitur Mendatang',
+                        settings: 'Application Settings'
+                    };
+                    return titles[this.currentTab] || 'Puru Tools';
+                },
+
+                async startMirroring(type) {
+                    if (this.connections.length === 0) {
+                        this.addToast('Tidak ada teman yang terhubung!');
+                        return;
+                    }
+                    this.localStream = type === 'screen' 
+                        ? await MirroringHandler.getScreenStream() 
+                        : await MirroringHandler.getAudioStream();
+                    if (this.localStream) {
+                        this.mirroringActive = true;
+                        this.connections.forEach(conn => {
+                            this.peer.call(conn.peer, this.localStream);
+                        });
+                        if (type === 'screen') {
+                            setTimeout(() => {
+                                const video = document.getElementById('mirror-video');
+                                if (video) video.srcObject = this.localStream;
+                            }, 500);
+                        }
+                        this.localStream.getTracks().forEach(track => {
+                            track.onended = () => this.stopMirroring();
+                        });
+                        this.addToast(`Mirroring ${type} dimulai!`);
+                    }
+                },
+
+                stopMirroring() {
+                    if (this.localStream) {
+                        this.localStream.getTracks().forEach(track => track.stop());
+                        this.localStream = null;
+                    }
+                    this.mirroringActive = false;
+                    const video = document.getElementById('mirror-video');
+                    if (video) video.srcObject = null;
+                    this.addToast('Mirroring dihentikan');
+                },
+
+                initCollab(targetId = null) {
+                    if (this.peer && !this.peer.destroyed) {
+                        if (this.roomId) {
+                            setTimeout(() => this.generateQR(), 200);
+                        }
+                        return;
+                    }
+                    const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+                    const joinId = targetId || urlParams.get('room');
+                    
+                    this.peer = new Peer();
+                    this.peerStatus = joinId ? 'Menghubungkan...' : 'Menyiapkan Room...';
+                    
+                    this.peer.on('open', (id) => {
+                        this.roomId = id;
+                        this.peerStatus = joinId ? 'Mencari Teman...' : 'Menunggu Koneksi...';
+                        if (joinId && joinId !== id) {
+                            this.connectToPeer(joinId);
+                        } else {
+                            setTimeout(() => this.generateQR(), 500);
+                        }
+                    });
+                    this.peer.on('connection', (conn) => {
+                        this.peerStatus = 'Connected';
+                        this.setupConnection(conn);
+                        this.setupComplete = true; // Selesai setup saat seseorang terhubung
+                        this.addToast('Seseorang bergabung!');
+                    });
+                    this.peer.on('call', (call) => {
+                        this.addToast('Menerima aliran media...');
+                        call.answer(); 
+                        call.on('stream', (remoteStream) => {
+                            this.mirroringActive = true;
+                            this.currentTab = 'mirroring';
+                            setTimeout(() => {
+                                const video = document.getElementById('mirror-video');
+                                if (video) {
+                                    video.srcObject = remoteStream;
+                                    video.play().catch(e => console.error("Playback error:", e));
+                                }
+                            }, 500);
+                        });
+                    });
+                    this.peer.on('disconnected', () => {
+                        this.peerStatus = 'Disconnected. Reconnecting...';
+                        this.peer.reconnect();
+                    });
+                    this.peer.on('error', (err) => {
+                        console.error('Peer Error:', err);
+                        if (err.type === 'peer-unavailable') {
+                            this.peerStatus = 'Peer not found. Retrying...';
+                            if (joinId) setTimeout(() => this.connectToPeer(joinId), 5000);
+                        } else {
+                            this.peerStatus = 'Error';
+                            this.addToast('Terjadi kesalahan jaringan P2P');
+                        }
+                    });
+                },
+
+                setupConnection(conn) {
+                    this.connections.push(conn);
+                    setTimeout(() => {
+                        if (conn.open) conn.send(this.collabText);
+                    }, 1000);
+                    conn.on('data', (data) => {
+                        if (data !== this.collabText) {
+                            this.collabText = data;
+                            localStorage.setItem('puru_collab_text', data);
+                        }
+                    });
+                    conn.on('close', () => {
+                        this.connections = this.connections.filter(c => c !== conn);
+                        if (this.connections.length === 0) {
+                            this.peerStatus = 'Ready';
+                            const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+                            const joinId = urlParams.get('room');
+                            if (joinId && joinId !== this.roomId) {
+                                this.peerStatus = 'Connection lost. Retrying...';
+                                setTimeout(() => this.connectToPeer(joinId), 5000);
+                            }
+                        }
+                    });
+                    conn.on('error', (err) => {
+                        console.error('Connection Error:', err);
+                        this.addToast('Koneksi terputus');
+                    });
+                },
+
+                startNewSession() {
+                    this.isJoining = false;
+                    this.initCollab();
+                },
+
+                joinRoomManual() {
+                    if (!this.roomCodeInput.trim()) {
+                        this.addToast('Masukkan kode room terlebih dahulu');
+                        return;
+                    }
+                    this.isJoining = true;
+                    this.initCollab(this.roomCodeInput.trim());
+                },
+
+                connectToPeer(id) {
+                    const conn = this.peer.connect(id);
+                    this.peerStatus = 'Menyambungkan ke Host...';
+                    conn.on('open', () => {
+                        this.peerStatus = 'Connected';
+                        this.setupConnection(conn);
+                        this.setupComplete = true; // Selesai setup saat berhasil menyambung
+                        this.addToast('Berhasil terhubung ke room!');
+                    });
+                },
+
+                syncText(value) {
+                    localStorage.setItem('puru_collab_text', value);
+                    this.connections.forEach(conn => {
+                        if (conn.open) conn.send(value);
+                    });
+                },
+
+                getCollabUrl() {
+                    if (!this.roomId) return window.location.origin + window.location.pathname;
+                    return window.location.origin + window.location.pathname + '#room=' + this.roomId;
+                },
+
+                copyCollabUrl() {
+                    navigator.clipboard.writeText(this.getCollabUrl());
+                    this.addToast('Link berhasil disalin!');
+                },
+
+                copyCollabText() {
+                    navigator.clipboard.writeText(this.collabText);
+                    this.addToast('Teks berhasil disalin!');
+                },
+
+                generateQR() {
+                    const qr = qrcode(0, 'M');
+                    qr.addData(this.getCollabUrl());
+                    qr.make();
+                    
+                    const containers = ['qrcode-container', 'setup-qrcode-container'];
+                    containers.forEach(id => {
+                        const container = document.getElementById(id);
+                        if (container) {
+                            container.innerHTML = qr.createImgTag(4);
+                            const img = container.querySelector('img');
+                            if (img) {
+                                img.style.width = id.includes('setup') ? '180px' : '100%';
+                                img.style.height = id.includes('setup') ? '180px' : '100%';
+                            }
+                        }
+                    });
+                },
+
+                addToast(message) {
+                    const Toast = Swal.mixin({
+                        toast: true,
+                        position: 'bottom-end',
+                        showConfirmButton: false,
+                        timer: 3000,
+                        timerProgressBar: true,
+                        background: '#111827',
+                        color: '#f3f4f6'
+                    });
+                    Toast.fire({
+                        icon: 'success',
+                        title: message
+                    });
+                }
+            }
+        }
+    </script>
 </body>
 </html>
