@@ -260,7 +260,7 @@
                 <div id="video-wrapper" class="w-full h-full">
                     <video id="remote-video" autoplay playsinline class="w-full h-full object-contain"></video>
                 </div>
-                <p id="video-placeholder" class="absolute z-10 text-gray-500 text-sm">Menunggu sinyal video...</p>
+                <p id="video-placeholder" class="absolute z-10 text-gray-500 text-sm">Tunggu Boss belum di mulai</p>
             </div>
 
             <div class="grid grid-cols-3 gap-2 bg-gray-800/30 p-2 rounded-xl">
@@ -615,13 +615,21 @@
                     
                     // Pastikan sinkronisasi audio video terjaga
                     Player.init(videoEl, call.peerConnection);
-                    // Terapkan buffer seimbang 500ms agar lancar tanpa delay berlebihan
-                    Player.setPlayoutDelay(500);
+                    // Terapkan buffer 10 detik agar cukup waktu mengumpulkan packet loss
+                    Player.setPlayoutDelay(10000);
                     // Panggil ulang setelah 2 detik untuk memastikan receivers sudah siap
-                    setTimeout(() => Player.setPlayoutDelay(500), 2000);
+                    setTimeout(() => Player.setPlayoutDelay(10000), 2000);
 
                     videoEl.srcObject = remoteStream;
                     
+                    // Deteksi jika track video berakhir (PC stop share)
+                    remoteStream.getVideoTracks()[0].onended = () => {
+                        videoEl.srcObject = null;
+                        const placeholder = document.getElementById('video-placeholder');
+                        placeholder.classList.remove('hidden');
+                        placeholder.innerText = "Tunggu Boss belum di mulai";
+                    };
+
                     // Memastikan video diputar setelah stream dipasang
                     videoEl.onloadedmetadata = () => {
                         // Langsung nyalakan suara (unmuted)
