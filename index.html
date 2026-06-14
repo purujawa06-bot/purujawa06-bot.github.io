@@ -15,13 +15,12 @@
         const Player = {
             currentZoom: 1,
             video: null,
-            pc: null, // Menyimpan referensi RTCPeerConnection
+            pc: null,
 
             init(videoElement, peerConnection = null) {
                 this.video = videoElement;
                 if (peerConnection) this.pc = peerConnection;
                 this.reset();
-                // Force rendering kickstart
                 if (this.video) {
                     this.video.style.opacity = '0.99';
                     setTimeout(() => { this.video.style.opacity = '1'; }, 50);
@@ -62,7 +61,6 @@
             toggleMute() {
                 if (!this.video) return true;
                 this.video.muted = !this.video.muted;
-                // Some mobile browsers need explicit volume set after unmuting
                 if (!this.video.muted) this.video.volume = 1.0;
                 return this.video.muted;
             },
@@ -72,9 +70,9 @@
                 if (!document.fullscreenElement) {
                     if (elem.requestFullscreen) {
                         elem.requestFullscreen();
-                    } else if (elem.webkitRequestFullscreen) { /* Safari */
+                    } else if (elem.webkitRequestFullscreen) {
                         elem.webkitRequestFullscreen();
-                    } else if (elem.msRequestFullscreen) { /* IE11 */
+                    } else if (elem.msRequestFullscreen) {
                         elem.msRequestFullscreen();
                     }
                 } else {
@@ -85,16 +83,16 @@
             },
 
             /**
-             * Mengatur playoutDelayHint & jitterBufferTarget pada RTCRtpReceiver.
-             * Memisahkan target delay audio dan video untuk sinkronisasi yang lebih baik.
+             * Atur jitterBufferTarget & playoutDelayHint.
+             * Default 2000ms untuk audio & video agar buffer cukup tanpa delay berlebih.
              */
             setPlayoutDelay(targetMs) {
                 if (!this.pc) return;
                 const receivers = this.pc.getReceivers();
                 if (receivers.length === 0) return;
 
-                // Paksa target yang sama untuk audio dan video agar sync sempurna
-                const balancedMs = targetMs || 500; // default 500ms, cukup untuk buffer halus
+                // Target buffer 2000ms (2 detik) sebagai default untuk semua track
+                const balancedMs = targetMs || 2000;
                 const targetSec = balancedMs / 1000;
 
                 receivers.forEach(receiver => {
@@ -247,13 +245,12 @@
              <div class="border-b border-gray-700 pb-3 flex justify-between items-center">
                 <div>
                     <h2 class="text-lg font-semibold text-emerald-400">Receiver HP</h2>
-                    <p id="latency-status" class="text-[9px] text-gray-500 uppercase tracking-widest">Mode: Optimal Sync</p>
+                    <p id="latency-status" class="text-[9px] text-gray-500 uppercase tracking-widest">Buffer: 2000ms (Low Latency)</p>
                 </div>
                 <button onclick="disconnectHP()" class="text-gray-500 hover:text-white">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
             </div>
-
 
             
             <div id="video-container" class="relative bg-black rounded-xl overflow-hidden flex items-center justify-center border border-gray-700 min-h-[200px] max-h-[60vh]">
@@ -358,8 +355,6 @@
         function startHeartbeat(id) {
             updateHeartbeat(id);
             heartbeatInterval = setInterval(() => {
-                // Jika sudah ada koneksi, kita tetap kirim heartbeat agar HP lain tahu kita sibuk 
-                // atau kita bisa berhenti tergantung keinginan. Di sini kita tetap aktif.
                 updateHeartbeat(id);
             }, 5000);
         }
@@ -398,7 +393,6 @@
                 document.getElementById('pc-status-dot').classList.replace('bg-yellow-500', 'bg-green-500');
                 document.getElementById('pc-status-text').innerText = "Terhubung";
                 
-                // Jika screen share sudah aktif sebelum HP konek, langsung kirim streamnya!
                 if (activeScreenStream) {
                     console.log("Otomatis mengirim stream ke receiver baru...");
                     const call = peer.call(conn.peer, activeScreenStream);
@@ -444,11 +438,10 @@
                     };
                     const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
                     
-                    // Optimasi kualitas track sebelum dikirim
                     const vTrack = stream.getVideoTracks()[0];
                     const aTrack = stream.getAudioTracks()[0];
-                    if (vTrack) vTrack.contentHint = 'detail'; // Prioritas ketajaman (teks/ui)
-                    if (aTrack) aTrack.contentHint = 'music';  // Prioritas fidelitas audio
+                    if (vTrack) vTrack.contentHint = 'detail';
+                    if (aTrack) aTrack.contentHint = 'music';
 
                     activeScreenStream = stream;
                     
@@ -472,14 +465,12 @@
             }
         }
 
-
-
         function optimizeCall(call) {
             if (!call) return;
             const pc = call.peerConnection;
             let bitrateInterval = null;
 
-            // Preferensi codec yang efisien (VP9/H264) dengan akselerasi hardware
+            // Codec preference
             try {
                 pc.getTransceivers().forEach(transceiver => {
                     if (transceiver.sender?.track?.kind === 'video') {
@@ -494,33 +485,31 @@
                 });
             } catch(e) { console.warn('Codec preference not supported:', e); }
 
-            // Atur parameter awal: bitrate moderat, prioritas tinggi
+            // Parameter awal: bitrate rendah (1.5 Mbps) untuk mengurangi packet loss
             pc.getSenders().forEach(sender => {
                 if (!sender.track) return;
                 const params = sender.getParameters();
                 if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
                 if (sender.track.kind === 'video') {
-                    params.encodings[0].maxBitrate = 2500000;  // Mulai 2.5 Mbps, naik jika stabil
+                    params.encodings[0].maxBitrate = 1500000;      // 1.5 Mbps awal
                     params.encodings[0].networkPriority = 'high';
-                    params.encodings[0].degradationPreference = 'maintain-framerate';
+                    params.encodings[0].degradationPreference = 'balanced';
                 } else if (sender.track.kind === 'audio') {
-                    params.encodings[0].maxBitrate = 128000;   // 128 kbps cukup untuk stereo
+                    params.encodings[0].maxBitrate = 128000;
                 }
                 sender.setParameters(params).catch(console.error);
             });
 
-            // Mulai pemantauan statistik jaringan setiap 3 detik
+            // Adaptive bitrate: responsif terhadap loss
             bitrateInterval = setInterval(async () => {
                 try {
                     const stats = await pc.getStats();
-                    let videoSender = null;
-                    let roundTripTime = 0;
                     let packetsLost = 0;
                     let packetsSent = 1;
+                    let roundTripTime = 0;
 
                     stats.forEach(report => {
                         if (report.type === 'remote-inbound-rtp' && report.kind === 'video') {
-                            // Data dari sisi penerima (jika tersedia)
                             packetsLost = report.packetsLost || 0;
                             packetsSent = report.packetsReceived || 1;
                             roundTripTime = report.roundTripTime || 0;
@@ -529,9 +518,7 @@
                             roundTripTime = report.currentRoundTripTime || roundTripTime;
                         }
                         if (report.type === 'outbound-rtp' && report.kind === 'video') {
-                            videoSender = report;
-                            // Fallback jika remote-inbound tidak ada
-                            if (!packetsSent || packetsSent <= 1) {
+                            if (packetsSent <= 1) {
                                 packetsLost = report.packetsLost || 0;
                                 packetsSent = report.packetsSent || 1;
                             }
@@ -545,13 +532,13 @@
                         if (sender.track?.kind === 'video') {
                             const p = sender.getParameters();
                             if (!p.encodings?.[0]) return;
-                            let newBitrate = p.encodings[0].maxBitrate || 2500000;
+                            let newBitrate = p.encodings[0].maxBitrate || 1500000;
                             
-                            // Logika adaptive: naik/turun bertahap berdasarkan loss & RTT
-                            if (lossRate > 0.03 || roundTripTime > 0.3) {
-                                newBitrate = Math.max(500000, newBitrate - 500000); // Min 500 kbps
-                            } else if (lossRate < 0.01 && roundTripTime < 0.1 && newBitrate < 8000000) {
-                                newBitrate = Math.min(8000000, newBitrate + 500000); // Maks 8 Mbps
+                            // Agresif menurunkan jika loss > 2% atau RTT tinggi
+                            if (lossRate > 0.02 || roundTripTime > 0.25) {
+                                newBitrate = Math.max(400000, newBitrate - 500000);
+                            } else if (lossRate < 0.005 && roundTripTime < 0.08 && newBitrate < 6000000) {
+                                newBitrate = Math.min(6000000, newBitrate + 300000);
                             }
                             
                             if (newBitrate !== p.encodings[0].maxBitrate) {
@@ -566,12 +553,10 @@
                 }
             }, 3000);
 
-            // Bersihkan interval saat koneksi berakhir
             call.on('close', () => {
                 if(bitrateInterval) clearInterval(bitrateInterval);
             });
 
-            // ICE restart jika gagal
             pc.onconnectionstatechange = () => {
                 console.log("Connection State:", pc.connectionState);
                 if (pc.connectionState === 'failed') {
@@ -603,7 +588,6 @@
                 console.log("HP Peer ID:", id);
             });
 
-            // CRITICAL: Listener for incoming video stream
             peer.on('call', (call) => {
                 console.log("Incoming call from PC...");
                 activeCall = call;
@@ -613,16 +597,13 @@
                     hideAll();
                     document.getElementById('step-hp-receiver').classList.remove('hidden');
                     
-                    // Pastikan sinkronisasi audio video terjaga
                     Player.init(videoEl, call.peerConnection);
-                    // Terapkan buffer 10 detik agar cukup waktu mengumpulkan packet loss
-                    Player.setPlayoutDelay(10000);
-                    // Panggil ulang setelah 2 detik untuk memastikan receivers sudah siap
-                    setTimeout(() => Player.setPlayoutDelay(10000), 2000);
+                    // Set buffer default 2000ms untuk audio & video
+                    Player.setPlayoutDelay(2000);
+                    setTimeout(() => Player.setPlayoutDelay(2000), 2000);
 
                     videoEl.srcObject = remoteStream;
                     
-                    // Deteksi jika track video berakhir (PC stop share)
                     remoteStream.getVideoTracks()[0].onended = () => {
                         videoEl.srcObject = null;
                         const placeholder = document.getElementById('video-placeholder');
@@ -630,9 +611,7 @@
                         placeholder.innerText = "Tunggu Boss belum di mulai";
                     };
 
-                    // Memastikan video diputar setelah stream dipasang
                     videoEl.onloadedmetadata = () => {
-                        // Langsung nyalakan suara (unmuted)
                         videoEl.muted = false;
                         videoEl.play().then(() => {
                             console.log("Playback started (audio on)");
@@ -663,7 +642,7 @@
 
         function openDiscovery() {
             myRole = 'HP';
-            setupReceiverPeer(); // Ensure peer is ready to receive calls
+            setupReceiverPeer();
             hideAll();
             document.getElementById('step-discovery').classList.remove('hidden');
             refreshBroadcasters();
@@ -688,7 +667,6 @@
 
                 for (let key in data) {
                     const b = data[key];
-                    // Deteksi jika penyiar tidak kirim ping > 15 detik (dianggap mati)
                     if (now - b.timestamp < 15000) {
                         const btn = document.createElement('button');
                         btn.className = "w-full bg-gray-700 hover:bg-blue-600/30 border border-gray-600 p-3 rounded-xl flex justify-between items-center transition";
@@ -703,7 +681,6 @@
                         listEl.appendChild(btn);
                         count++;
                     } else {
-                        // Hapus data stale secara otomatis (pembersihan dari sisi receiver)
                         cleanupFirebase(key);
                     }
                 }
@@ -718,12 +695,10 @@
         function connectToBroadcaster(id) {
             if (!peer) setupReceiverPeer();
             
-            // Show loading or transition UI
             hideAll();
             document.getElementById('step-hp-receiver').classList.remove('hidden');
             document.getElementById('video-placeholder').innerText = "Menghubungkan ke " + id + "...";
 
-            // Establish Data Connection so PC knows who to call
             connection = peer.connect(id);
             
             connection.on('open', () => {
@@ -771,9 +746,6 @@
             Player.toggleFullScreen('video-container');
         }
 
-        // Latency manual dihapus. Sistem sekarang otomatis menggunakan mode optimal (Realtime).
-
-        // Global browse choice
         function openBrowseChoice() { openDiscovery(); }
     </script>
 </body>
