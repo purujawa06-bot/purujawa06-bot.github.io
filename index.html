@@ -245,7 +245,7 @@
              <div class="border-b border-gray-700 pb-3 flex justify-between items-center">
                 <div>
                     <h2 class="text-lg font-semibold text-emerald-400">Receiver HP</h2>
-                    <p id="latency-status" class="text-[9px] text-gray-500 uppercase tracking-widest">Buffer: 2000ms (Low Latency)</p>
+                    <p id="latency-status" class="text-[9px] text-gray-500 uppercase tracking-widest">Buffer: 2000ms (Kualitas HD)</p>
                 </div>
                 <button onclick="disconnectHP()" class="text-gray-500 hover:text-white">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -440,6 +440,7 @@
                     
                     const vTrack = stream.getVideoTracks()[0];
                     const aTrack = stream.getAudioTracks()[0];
+                    // Konten hint: detail untuk video (teks, ui), music untuk audio
                     if (vTrack) vTrack.contentHint = 'detail';
                     if (aTrack) aTrack.contentHint = 'music';
 
@@ -470,7 +471,7 @@
             const pc = call.peerConnection;
             let bitrateInterval = null;
 
-            // Codec preference
+            // Preferensi codec modern (VP9 / H.264) 
             try {
                 pc.getTransceivers().forEach(transceiver => {
                     if (transceiver.sender?.track?.kind === 'video') {
@@ -485,22 +486,22 @@
                 });
             } catch(e) { console.warn('Codec preference not supported:', e); }
 
-            // Parameter awal: bitrate rendah (1.5 Mbps) untuk mengurangi packet loss
+            // Parameter awal: bitrate 3 Mbps, prioritas resolusi (maintain-resolution)
             pc.getSenders().forEach(sender => {
                 if (!sender.track) return;
                 const params = sender.getParameters();
                 if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
                 if (sender.track.kind === 'video') {
-                    params.encodings[0].maxBitrate = 1500000;      // 1.5 Mbps awal
+                    params.encodings[0].maxBitrate = 3000000;      // 3 Mbps awal, kualitas HD jernih
                     params.encodings[0].networkPriority = 'high';
-                    params.encodings[0].degradationPreference = 'balanced';
+                    params.encodings[0].degradationPreference = 'maintain-resolution'; // Pertahankan ketajaman
                 } else if (sender.track.kind === 'audio') {
-                    params.encodings[0].maxBitrate = 128000;
+                    params.encodings[0].maxBitrate = 128000;       // 128 kbps stereo
                 }
                 sender.setParameters(params).catch(console.error);
             });
 
-            // Adaptive bitrate: responsif terhadap loss
+            // Adaptive bitrate: turun agresif jika loss/RTT tinggi, naik perlahan jika stabil
             bitrateInterval = setInterval(async () => {
                 try {
                     const stats = await pc.getStats();
@@ -532,13 +533,15 @@
                         if (sender.track?.kind === 'video') {
                             const p = sender.getParameters();
                             if (!p.encodings?.[0]) return;
-                            let newBitrate = p.encodings[0].maxBitrate || 1500000;
+                            let newBitrate = p.encodings[0].maxBitrate || 3000000;
                             
-                            // Agresif menurunkan jika loss > 2% atau RTT tinggi
+                            // Turunkan jika loss > 2% atau RTT > 0.25 detik
                             if (lossRate > 0.02 || roundTripTime > 0.25) {
-                                newBitrate = Math.max(400000, newBitrate - 500000);
-                            } else if (lossRate < 0.005 && roundTripTime < 0.08 && newBitrate < 6000000) {
-                                newBitrate = Math.min(6000000, newBitrate + 300000);
+                                newBitrate = Math.max(600000, newBitrate - 500000);  // Min 600 Kbps
+                            } 
+                            // Naikkan jika loss < 0.5% dan RTT < 80 ms, maks 8 Mbps
+                            else if (lossRate < 0.005 && roundTripTime < 0.08 && newBitrate < 8000000) {
+                                newBitrate = Math.min(8000000, newBitrate + 300000);
                             }
                             
                             if (newBitrate !== p.encodings[0].maxBitrate) {
