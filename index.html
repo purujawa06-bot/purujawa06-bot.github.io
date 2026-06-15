@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
         /**
-         * Player.js - Dioptimalkan untuk buffer besar demi kualitas & kelancaran
+         * Player.js - Dioptimalkan untuk buffer 2 detik & NACK retransmisi
          */
         const Player = {
             currentZoom: 1,
@@ -84,15 +84,14 @@
 
             /**
              * Atur jitterBufferTarget & playoutDelayHint.
-             * Default 5000ms (5 detik) demi kualitas tinggi & tahan jaringan buruk.
+             * Buffer 2000ms (2 detik) – cukup untuk jitter, tidak terlalu delay.
              */
             setPlayoutDelay(targetMs) {
                 if (!this.pc) return;
                 const receivers = this.pc.getReceivers();
                 if (receivers.length === 0) return;
 
-                // Buffer 5000ms (5 detik) untuk menyerap fluktuasi jaringan
-                const balancedMs = targetMs || 5000;
+                const balancedMs = targetMs || 2000;
                 const targetSec = balancedMs / 1000;
 
                 receivers.forEach(receiver => {
@@ -245,7 +244,7 @@
              <div class="border-b border-gray-700 pb-3 flex justify-between items-center">
                 <div>
                     <h2 class="text-lg font-semibold text-emerald-400">Receiver HP</h2>
-                    <p id="latency-status" class="text-[9px] text-gray-500 uppercase tracking-widest">Buffer: 5000ms (Kualitas Tinggi) · Latensi ±5 detik</p>
+                    <p id="latency-status" class="text-[9px] text-gray-500 uppercase tracking-widest">Buffer: 2000ms (Kualitas HD) · Latensi ±2 detik · NACK aktif</p>
                 </div>
                 <button onclick="disconnectHP()" class="text-gray-500 hover:text-white">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -470,6 +469,9 @@
             const pc = call.peerConnection;
             let bitrateInterval = null;
 
+            // NACK diaktifkan secara default pada semua browser modern
+            console.log("[NACK] WebRTC NACK aktif – paket yang hilang akan di-retransmisi otomatis.");
+
             // Preferensi codec modern (AV1 > VP9 > H264)
             try {
                 pc.getTransceivers().forEach(transceiver => {
@@ -601,9 +603,9 @@
                     document.getElementById('step-hp-receiver').classList.remove('hidden');
                     
                     Player.init(videoEl, call.peerConnection);
-                    // Buffer 5 detik untuk kualitas tinggi & anti-lag
-                    Player.setPlayoutDelay(5000);
-                    setTimeout(() => Player.setPlayoutDelay(5000), 3000);
+                    // Buffer 2 detik – kualitas tinggi dengan latensi rendah
+                    Player.setPlayoutDelay(2000);
+                    setTimeout(() => Player.setPlayoutDelay(2000), 2000);
 
                     videoEl.srcObject = remoteStream;
                     
