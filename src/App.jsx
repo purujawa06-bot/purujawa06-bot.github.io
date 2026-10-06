@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 
 const GITHUB_ACCOUNT = 'https://github.com/purujawa06-bot'
 const PURU_AI_URL = 'https://github.com/purujawa06-bot/PURU-AI'
+const TELEGRAM_URL = 'https://t.me/puruupuruu'
 
 const NAV_ITEMS = [
   { href: '#top', label: 'Home', icon: 'fa-solid fa-house' },
@@ -221,7 +222,7 @@ $ npm run deploy
               </details>
               <details className="faq-item">
                 <summary>How to contact Ricky Purwanto?</summary>
-                <p>Via GitHub: open an issue on any public repo at github.com/purujawa06-bot. Based in Indonesia (WIB), open to collaboration.</p>
+                <p>Chat langsung via Telegram @puruupuruu (https://t.me/puruupuruu) — fast response. Atau via GitHub: open an issue on any public repo at github.com/purujawa06-bot. Based in Indonesia (WIB), open to collaboration.</p>
               </details>
             </div>
           </section>
@@ -233,10 +234,13 @@ $ npm run deploy
             </div>
             <article className="project contact-card">
               <h3>Work Together?</h3>
-              <p>Find all public work and activity on GitHub. Open an issue on any repo to get in touch — Indonesia (WIB).</p>
+              <p>Chat langsung via Telegram @puruupuruu — fast response. Atau intip semua kerjaan open source di GitHub — Indonesia (WIB).</p>
               <address className="go" style={{ fontStyle: 'normal' }}>
-                <a className="btn btn-primary" href={GITHUB_ACCOUNT} target="_blank" rel="noreferrer">
-                  <i className="fa-brands fa-github" aria-hidden="true"></i> Contact via GitHub
+                <a className="btn btn-primary" href={TELEGRAM_URL} target="_blank" rel="noreferrer">
+                  <i className="fa-brands fa-telegram" aria-hidden="true"></i> Chat via Telegram
+                </a>
+                <a className="btn" href={GITHUB_ACCOUNT} target="_blank" rel="noreferrer">
+                  <i className="fa-brands fa-github" aria-hidden="true"></i> GitHub
                 </a>
                 <a className="btn" href="#top">
                   <i className="fa-solid fa-arrow-up" aria-hidden="true"></i> Back to Top
