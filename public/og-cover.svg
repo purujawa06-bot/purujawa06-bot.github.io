@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0a12"/>
+      <stop offset="0.55" stop-color="#1a1446"/>
+      <stop offset="1" stop-color="#0e4d4a"/>
+    </linearGradient>
+    <linearGradient id="acc" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#00e5cc"/>
+      <stop offset="0.5" stop-color="#7c6bff"/>
+      <stop offset="1" stop-color="#ff7ad9"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="60" y="60" width="1080" height="510" rx="28" fill="none" stroke="#2a2a45" stroke-width="2"/>
+  <rect x="96" y="120" width="88" height="88" rx="22" fill="url(#acc)"/>
+  <text x="140" y="182" font-family="sans-serif" font-size="52" font-weight="bold" text-anchor="middle">⚡</text>
+  <text x="220" y="160" font-family="sans-serif" font-size="44" font-weight="800" fill="#f1f1f6">PuruBoy</text>
+  <text x="220" y="196" font-family="sans-serif" font-size="22" fill="#a8a8c0">Ricky Purwanto — Indonesia</text>
+  <text x="96" y="300" font-family="sans-serif" font-size="64" font-weight="800" fill="#ffffff">Web, API &amp; AI Developer</text>
+  <text x="96" y="352" font-family="sans-serif" font-size="26" fill="#c9c9e6">Vite + React • REST API • Telegram AI Bot (PuruClaw)</text>
+  <rect x="96" y="400" width="300" height="64" rx="16" fill="url(#acc)"/>
+  <text x="246" y="442" font-family="sans-serif" font-size="26" font-weight="700" fill="#0a0a12" text-anchor="middle">puruboy.duckdns.org</text>
+  <text x="96" y="508" font-family="sans-serif" font-size="22" fill="#a8a8c0">Open source on GitHub — @purujawa06-bot</text>
+</svg>
