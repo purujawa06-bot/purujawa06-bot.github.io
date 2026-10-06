@@ -121,3 +121,11 @@ section { padding: 28px 0; scroll-margin-top: 80px; }
 footer { border-top: 1px solid var(--border); margin-top: 36px; padding: 24px 0 48px; color: var(--muted); }
 footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #00e676; display: inline-block; box-shadow: 0 0 0 4px rgba(0,230,118,.18); }
+.proj-icon {
+  width: 48px; height: 48px; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 14px; font-size: 22px; color: white;
+}
+.btn i, .tag i { margin-right: 2px; }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }

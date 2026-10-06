@@ -1,11 +1,12 @@
 import React from 'react'
 
+const GITHUB_ACCOUNT = 'https://github.com/purujawa06-bot'
 const PURU_AI_URL = 'https://github.com/purujawa06-bot/PURU-AI'
 
-function ProjectCard({ emoji, title, desc, tags, badge, actions }) {
+function ProjectCard({ icon, title, desc, tags, badge, actions }) {
   return (
     <article className="project">
-      <div style={{ fontSize: 30 }} aria-hidden="true">{emoji}</div>
+      <div className="proj-icon" aria-hidden="true"><i className={icon}></i></div>
       <h3>{title}</h3>
       {badge ? <span className="badge-soon">{badge}</span> : null}
       <p>{desc}</p>
@@ -32,7 +33,9 @@ export default function App() {
           <nav className="nav-links" aria-label="Navigasi utama">
             <a href="#projects">Projects</a>
             <a href="#about">About</a>
-            <a className="btn" href={PURU_AI_URL} target="_blank" rel="noreferrer">GitHub</a>
+            <a className="btn" href={GITHUB_ACCOUNT} target="_blank" rel="noreferrer">
+              <i className="fa-brands fa-github" aria-hidden="true"></i> GitHub
+            </a>
           </nav>
         </div>
       </header>
@@ -49,11 +52,11 @@ export default function App() {
                 ada yang sudah jalan, ada yang coming soon. Santai, gas terus. ⚡
               </p>
               <div className="hero-actions">
-                <a className="btn btn-primary" href="#projects">Lihat Projects ↓</a>
-                <a className="btn" href={PURU_AI_URL} target="_blank" rel="noreferrer">⭐ PuruClaw di GitHub</a>
+                <a className="btn btn-primary" href="#projects"><i className="fa-solid fa-arrow-down" aria-hidden="true"></i> Lihat Projects</a>
+                <a className="btn" href={GITHUB_ACCOUNT} target="_blank" rel="noreferrer"><i className="fa-brands fa-github" aria-hidden="true"></i> GitHub Saya</a>
               </div>
               <div className="stats" aria-label="Statistik singkat">
-                <div className="stat"><strong>2+</strong><span>Projects aktif</span></div>
+                <div className="stat"><strong>2</strong><span>Projects</span></div>
                 <div className="stat"><strong>⚡</strong><span>Vite + React</span></div>
                 <div className="stat"><strong>🚀</strong><span>Deploy via Actions</span></div>
               </div>
@@ -79,33 +82,26 @@ $ npm run deploy
               <h2 id="projects-h">Projects</h2>
               <p>Koleksi oprekan PuruBoy.</p>
             </div>
-            <div className="grid">
+            <div className="grid grid-2">
               <ProjectCard
-                emoji="🔌"
+                icon="fa-solid fa-plug"
                 title="Project API"
                 desc="API service racikan sendiri — dokumentasi & endpoint publik segera hadir. Stay tuned."
                 tags={['REST', 'Coming Soon']}
                 badge="🚧 COMING SOON"
-                actions={<a className="btn" href="#projects" aria-disabled="true" onClick={(e) => e.preventDefault()}>Notify Me (soon)</a>}
+                actions={<a className="btn" href="#projects" aria-disabled="true" onClick={(e) => e.preventDefault()}><i className="fa-solid fa-bell" aria-hidden="true"></i> Notify Me (soon)</a>}
               />
               <ProjectCard
-                emoji="🤖"
+                icon="fa-solid fa-robot"
                 title="PuruClaw"
                 desc="AI assistant self-hosted buat Telegram — workspace operator dengan local tools, skills & smart memory. Live di GitHub."
                 tags={['Go', 'Telegram', 'AI Agent']}
                 actions={
                   <>
-                    <a className="btn btn-primary" href={PURU_AI_URL} target="_blank" rel="noreferrer">Buka di GitHub →</a>
-                    <a className="btn" href="https://github.com/purujawa06-bot/PURU-AI" target="_blank" rel="noreferrer">⭐ Star</a>
+                    <a className="btn btn-primary" href={PURU_AI_URL} target="_blank" rel="noreferrer"><i className="fa-brands fa-github" aria-hidden="true"></i> Buka di GitHub</a>
+                    <a className="btn" href={PURU_AI_URL} target="_blank" rel="noreferrer"><i className="fa-solid fa-star" aria-hidden="true"></i> Star</a>
                   </>
                 }
-              />
-              <ProjectCard
-                emoji="🌐"
-                title="MirrorCast (legacy)"
-                desc="Project WebRTC MirrorCast sebelumnya yang pernah live di halaman ini. Sudah dipensiunkan demi portfolio baru."
-                tags={['WebRTC', 'Archived']}
-                actions={<a className="btn" href="https://github.com/purujawa06-bot/purujawa06-bot.github.io" target="_blank" rel="noreferrer">Lihat history repo</a>}
               />
             </div>
           </section>
@@ -118,15 +114,18 @@ $ npm run deploy
               <p>
                 Saya <strong>Ricky Purwanto</strong> dari Indonesia (WIB). Fokus ke web, API,
                 dan AI tools yang ringan tapi nendang. Semua project open di GitHub{' '}
-                <a href="https://github.com/purujawa06-bot" target="_blank" rel="noreferrer"><strong>@purujawa06-bot</strong></a>.
+                <a href={GITHUB_ACCOUNT} target="_blank" rel="noreferrer"><strong><i className="fa-brands fa-github" aria-hidden="true"></i> @purujawa06-bot</strong></a>.
                 Kalau mau kolaborasi, sapa aja. 😎
               </p>
               <div className="tags">
-                <span className="tag">Indonesia</span>
+                <span className="tag"><i className="fa-solid fa-location-dot" aria-hidden="true"></i> Indonesia</span>
                 <span className="tag">WIB</span>
-                <span className="tag">Web</span>
-                <span className="tag">API</span>
-                <span className="tag">AI</span>
+                <span className="tag"><i className="fa-solid fa-globe" aria-hidden="true"></i> Web</span>
+                <span className="tag"><i className="fa-solid fa-plug" aria-hidden="true"></i> API</span>
+                <span className="tag"><i className="fa-solid fa-robot" aria-hidden="true"></i> AI</span>
+              </div>
+              <div className="go">
+                <a className="btn btn-primary" href={GITHUB_ACCOUNT} target="_blank" rel="noreferrer"><i className="fa-brands fa-github" aria-hidden="true"></i> Kunjungi GitHub Saya</a>
               </div>
             </article>
           </section>
@@ -136,7 +135,7 @@ $ npm run deploy
       <footer>
         <div className="wrap">
           <span>© {new Date().getFullYear()} <span translate="no">PuruBoy</span> — Ricky Purwanto. Built with Vite + React, deployed via GitHub Actions.</span>
-          <span><a href="#top" style={{ textDecoration: 'none' }}>↑ Back to top</a></span>
+          <span><a href="#top" style={{ textDecoration: 'none' }}><i className="fa-solid fa-arrow-up" aria-hidden="true"></i> Back to top</a></span>
         </div>
       </footer>
     </>
