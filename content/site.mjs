@@ -6,7 +6,9 @@
  */
 
 export const site = {
-  url: 'https://puruboy.duckdns.org',
+  // The root domain is HTTP-only until GitHub Pages provisions its TLS
+  // certificate. Switch this to https:// once the certificate is approved.
+  url: 'http://puruboy.duckdns.org',
   name: 'PuruBoy Blog',
   tagline: 'Catatan proyek, tutorial API, dan cerita di balik layar.',
   description:
